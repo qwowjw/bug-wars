@@ -24,9 +24,11 @@ class Settings:
     # UI/animation
     FONT_SIZE = 32
     ANIM_INTERVAL_MS = 165
+    # Espaçamento recomendado entre formigas na fila (pixels)
+    ANT_SPACING_PX = 12
 
     # Configuração dos ninhos, suas posições iniciais e contagens de formigas
     NEST_POSITIONS: List[Tuple[int, int]] = [(200, 200), (600, 200), (400, 300), (400, 100)]
-    INITIAL_ANTS_PER_NEST: List[int] = [1, 0, 1, 5]
+    INITIAL_ANTS_PER_NEST: List[int] = [10, 0, 10, 5]
     # Se verdadeiro, embaralha as posições dos ninhos a cada execução
     RANDOMIZE_NEST_POSITIONS: bool = True
