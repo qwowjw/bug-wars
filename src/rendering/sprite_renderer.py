@@ -8,8 +8,8 @@ from utils.asset_loader import load_image
 class SpriteRenderer:
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.ant_frame1: Optional[pygame.Surface] = load_image(os.path.join(settings.ANTS_DIR, "formiga-operaria.png"))
-        self.ant_frame2: Optional[pygame.Surface] = load_image(os.path.join(settings.ANTS_DIR, "formiga-operaria2.png"))
+        self.ant_frame1: Optional[pygame.Surface] = load_image(os.path.join(settings.ANTS_DIR, "faraoh_1.png"))
+        self.ant_frame2: Optional[pygame.Surface] = load_image(os.path.join(settings.ANTS_DIR, "faraoh_2.png"))
         self.nest_img: Optional[pygame.Surface] = load_image(os.path.join(settings.STRUCTURES_DIR, "formigueiro.png"))
 
         if self.ant_frame1:
