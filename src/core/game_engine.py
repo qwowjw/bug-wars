@@ -5,6 +5,7 @@ import pygame
 from config.settings import Settings
 from rendering.sprite_renderer import SpriteRenderer
 from entities.colony import Colony
+from entities.ant_types import ANT_TYPES_BY_NAME, farao
 from entities.ant import Ant
 
 
@@ -40,9 +41,10 @@ class GameEngine:
 
         # Prepara rects para interação/renderização
         self.nest_rects: List[pygame.Rect] = []
-        if self.sprites.nest_img:
+        nest_img = getattr(self.sprites, "nest_img", None)
+        if nest_img:
             for pos in self.nest_positions:
-                self.nest_rects.append(self.sprites.nest_img.get_rect(center=pos))
+                self.nest_rects.append(nest_img.get_rect(center=pos))
         else:
             w, h = self.settings.NEST_SIZE
             half_w, half_h = w // 2, h // 2
@@ -50,7 +52,18 @@ class GameEngine:
                 self.nest_rects.append(pygame.Rect(pos[0] - half_w, pos[1] - half_h, w, h))
 
         # Inicializa colônias (usa objetos Colony em vez de contadores simples)
-        self.colonies: List[Colony] = [Colony(pos) for pos in self.nest_positions]
+        # Usa tipos configuráveis via Settings: INITIAL_ANT_TYPE_PER_NEST ou DEFAULT_ANT_TYPE_NAME
+        type_names = getattr(self.settings, "INITIAL_ANT_TYPE_PER_NEST", None)
+        default_name = getattr(self.settings, "DEFAULT_ANT_TYPE_NAME", "Farao")
+        self.colonies: List[Colony] = []
+        for idx, pos in enumerate(self.nest_positions):
+            name = None
+            if isinstance(type_names, list) and idx < len(type_names):
+                name = type_names[idx]
+            if not name:
+                name = default_name
+            ant_type = ANT_TYPES_BY_NAME.get(name, farao)
+            self.colonies.append(Colony(pos, ant_type=ant_type))
 
         # Preenche as colônias com formigas iniciais conforme Settings
         initial_counts = getattr(self.settings, "INITIAL_ANTS_PER_NEST", [1] * len(self.nest_positions))
@@ -313,7 +326,9 @@ class GameEngine:
         self.screen.fill(self.settings.BG_COLOR)
         # Desenha ninhos
         for i, pos in enumerate(self.nest_positions):
-            self.sprites.draw_nest(self.screen, pos)
+            # determine nest image state: allied if colony has any ants, empty if zero
+            state = "ally" if len(self.colonies[i].ants) > 0 else "empty"
+            self.sprites.draw_nest(self.screen, pos, state=state)
             # círculo de seleção
             if self.selected_nest_index == i:
                 pygame.draw.circle(
@@ -343,6 +358,16 @@ class GameEngine:
             self._handle_events()
             # Tenta processar uma transferência pendente (uma formiga por ciclo)
             self._process_pending_transfers()
+            # Atualiza produção das colônias (delta em segundos)
+            dt = self.clock.get_time() / 1000.0
+            for colony in self.colonies:
+                produced = colony.update(dt)
+                if produced > 0:
+                    # re-render para refletir nova contagem imediatamente
+                    try:
+                        self._render()
+                    except Exception:
+                        pass
             if self.moving_ants:
                 self._update_sprite_animation()
             self._update_ant_movement()

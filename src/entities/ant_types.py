@@ -53,11 +53,11 @@ farao = AntType(
     armor=0.1,
     poison_resistance=0.05,
     range=6.0,
-    dps=0.6,
-    special_effect={"type": "sting_injection", "dot": 0.5, "duration": 5.0, "chance": 0.15},
+    dps=0.4,
+    special_effect={"type": "contamination", "dot": 0.3, "duration": 8.0, "chance": 0.15},
     aggressiveness=0.5,
     production_time=6.0,
-    speed=70.0,
+    speed=45.0,
     crit_chance=0.02,
     crit_multiplier=1.25,
 )
@@ -117,3 +117,6 @@ ALL_ANT_TYPES = [
     argentina,
     fogo,
 ]
+
+# Map names to instances for lookup by Settings
+ANT_TYPES_BY_NAME = {t.name: t for t in ALL_ANT_TYPES}

@@ -30,5 +30,9 @@ class Settings:
     # Configuração dos ninhos, suas posições iniciais e contagens de formigas
     NEST_POSITIONS: List[Tuple[int, int]] = [(200, 200), (600, 200), (400, 300), (400, 100)]
     INITIAL_ANTS_PER_NEST: List[int] = [10, 0, 10, 5]
+    # Nome do tipo de formiga padrão para novas colônias (deve existir em entities.ant_types)
+    DEFAULT_ANT_TYPE_NAME: str = "Farao"
+    # Lista opcional por ninho (paralela a NEST_POSITIONS) para especificar tipos iniciais
+    INITIAL_ANT_TYPE_PER_NEST: List[str] = [DEFAULT_ANT_TYPE_NAME] * len(NEST_POSITIONS)
     # Se verdadeiro, embaralha as posições dos ninhos a cada execução
     RANDOMIZE_NEST_POSITIONS: bool = True
