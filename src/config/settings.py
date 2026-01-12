@@ -1,3 +1,4 @@
+import logging
 from typing import List, Tuple
 
 
@@ -36,3 +37,9 @@ class Settings:
     INITIAL_ANT_TYPE_PER_NEST: List[str] = [DEFAULT_ANT_TYPE_NAME] * len(NEST_POSITIONS)
     # Se verdadeiro, embaralha as posições dos ninhos a cada execução
     RANDOMIZE_NEST_POSITIONS: bool = True
+
+    # Logging and parallelism knobs
+    # Use a standard logging level from the `logging` module (e.g. logging.INFO)
+    LOG_LEVEL: int = logging.INFO
+    # Number of worker threads used for parallel systems (production). 0 or 1 = no threads.
+    THREAD_WORKERS: int = 2

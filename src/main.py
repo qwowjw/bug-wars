@@ -1,5 +1,6 @@
 import os
 import sys
+import logging
 
 try:
     import pygame  # type: ignore
@@ -7,74 +8,88 @@ try:
 except ModuleNotFoundError:
     PYGAME_AVAILABLE = False
 
-# Force headless/demo mode even if pygame is installed by setting env var
-# `ANT_SIM_HEADLESS=1` or passing `--headless` on the command line.
+# Headless if env var set or `--headless` passed
 FORCE_HEADLESS = os.getenv("ANT_SIM_HEADLESS") == "1" or "--headless" in sys.argv
 
+from config.settings import Settings
+from utils.logging_config import configure_logging
+
+# configure logging early
+configure_logging(level=Settings.LOG_LEVEL)
 
 if PYGAME_AVAILABLE and not FORCE_HEADLESS:
-    from config.settings import Settings
-    from core.game_engine import GameEngine
-
+    from core.scene_manager import SceneManager
+    from core.level_scene import LevelScene
+    from core.levels import create_intro_config, create_level1_config, create_level2_config
 
     def main():
+        logging.getLogger(__name__).info("Starting game (interactive mode)")
         pygame.init()
         settings = Settings()
         screen = pygame.display.set_mode((settings.WIDTH, settings.HEIGHT))
         pygame.display.set_caption(settings.WINDOW_TITLE)
 
-        engine = GameEngine(screen, settings)
-        engine.run()
+        manager = SceneManager()
+
+        intro_cfg = create_intro_config(settings)
+        level1_cfg = create_level1_config(settings)
+        level2_cfg = create_level2_config(settings)
+
+        # Run intro
+        intro_scene = LevelScene(screen, settings, intro_cfg)
+        manager.set_scene(intro_scene)
+        intro_scene.run()
+
+        # On victory, transition to level1 then level2
+        if not intro_scene.running:
+            logging.getLogger(__name__).info("Transitioning to level1")
+            level1_scene = LevelScene(screen, settings, level1_cfg)
+            manager.set_scene(level1_scene)
+            level1_scene.run()
+
+            if not level1_scene.running:
+                logging.getLogger(__name__).info("Transitioning to level2")
+                level2_scene = LevelScene(screen, settings, level2_cfg)
+                manager.set_scene(level2_scene)
+                level2_scene.run()
 
         pygame.quit()
 
-
 else:
-    # Headless/demo mode when pygame isn't installed: simulate nest production
+    # Headless/demo mode: run a simple simulation of the intro level production
+    from core.levels import create_intro_config
+    from entities.colony import Colony
+    from entities.ant_types import farao
+
     def main():
-        import time
-        from entities.ant_types import farao
-        from entities.ant import Ant
+        logging.getLogger(__name__).info("Running in headless demo mode")
+        settings = Settings()
+        cfg = create_intro_config(settings)
 
-        print("Pygame not available — running headless production demo (Faraó)")
+        colonies = []
+        for idx, pos in enumerate(cfg.nest_positions):
+            ant_type = farao
+            col = Colony(pos, ant_type=ant_type)
+            if cfg.initial_owners[idx] != "empty" and cfg.initial_counts[idx] > 0:
+                col.spawn_ants(int(cfg.initial_counts[idx]))
+            colonies.append(col)
 
-        # Simple nest simulation: if there's at least one ant in the nest,
-        # production accumulates and produces new ants every `production_time` seconds.
-        nest_ants = []
-
-        # seed the nest with one Faraó (as requested)
-        initial = Ant((0, 0), farao)
-        nest_ants.append(initial)
-
-        production_progress = 0.0
-        production_time = float(farao.production_time)
-        tick = 0.5
-        total_simulation = 20.0
+        # simple production loop (safe to parallelize in real run)
+        dt = 0.5
         elapsed = 0.0
+        timeout = 10.0
+        while elapsed < timeout:
+            produced = 0
+            for c in colonies:
+                produced += c.update(dt)
+            logging.getLogger(__name__).debug("Headless tick produced=%d", produced)
+            # victory condition: all nests have at least one ally ant
+            if all(len(c.ants) > 0 for c in colonies):
+                logging.getLogger(__name__).info("Headless: victory achieved")
+                break
+            elapsed += dt
 
-        while elapsed < total_simulation:
-            has_any = len(nest_ants) > 0
-            if has_any:
-                production_progress += tick
-            # print status
-            status = (
-                f"t={elapsed:.1f}s | nest_count={len(nest_ants)} | "
-                f"production_active={has_any} | progress={production_progress:.1f}/{production_time}s"
-            )
-            print(status)
-
-            # produce when ready
-            while production_progress >= production_time and has_any:
-                production_progress -= production_time
-                new_ant = Ant((0, 0), farao)
-                nest_ants.append(new_ant)
-                print(f"Produced new {new_ant.type.name} — total now {len(nest_ants)}")
-
-            time.sleep(tick)
-            elapsed += tick
-
-        print("Simulation finished. Final nest count:", len(nest_ants))
-
+        logging.getLogger(__name__).info("Headless demo finished")
 
 if __name__ == "__main__":
     main()

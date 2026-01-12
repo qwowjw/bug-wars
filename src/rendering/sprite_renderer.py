@@ -13,6 +13,8 @@ class SpriteRenderer:
         # support different nest images: allied and empty
         self.nest_img_ally: Optional[pygame.Surface] = load_image(os.path.join(settings.STRUCTURES_DIR, "formigueiro_aliado.png"))
         self.nest_img_empty: Optional[pygame.Surface] = load_image(os.path.join(settings.STRUCTURES_DIR, "formigueiro_vazio.png"))
+        # enemy nest image (optional)
+        self.nest_img_enemy: Optional[pygame.Surface] = load_image(os.path.join(settings.STRUCTURES_DIR, "formigueiro_inimigo.png"))
 
         if self.ant_frame1:
             self.ant_frame1 = pygame.transform.scale(self.ant_frame1, self.settings.ANT_SIZE)
@@ -22,6 +24,8 @@ class SpriteRenderer:
             self.nest_img_ally = pygame.transform.scale(self.nest_img_ally, self.settings.NEST_SIZE)
         if self.nest_img_empty:
             self.nest_img_empty = pygame.transform.scale(self.nest_img_empty, self.settings.NEST_SIZE)
+        if self.nest_img_enemy:
+            self.nest_img_enemy = pygame.transform.scale(self.nest_img_enemy, self.settings.NEST_SIZE)
 
     def draw_ant(
         self,
@@ -49,11 +53,13 @@ class SpriteRenderer:
             img = self.nest_img_ally
         elif state == "empty":
             img = self.nest_img_empty
+        elif state == "enemy":
+            img = self.nest_img_enemy
 
         if img:
             rect = img.get_rect(center=(int(center[0]), int(center[1])))
             surface.blit(img, rect)
         else:
             # fallback: colored circle (green for ally, gray for empty)
-            color = (50, 200, 120) if state == "ally" else (120, 120, 120)
+            color = (50, 200, 120) if state == "ally" else ((200, 60, 60) if state == "enemy" else (120, 120, 120))
             pygame.draw.circle(surface, color, (int(center[0]), int(center[1])), self.settings.NEST_SIZE[0] // 2)

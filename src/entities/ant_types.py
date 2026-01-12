@@ -118,5 +118,23 @@ ALL_ANT_TYPES = [
     fogo,
 ]
 
+# Quenquen: enemy invader type
+Quenquen = AntType(
+    name="Quenquen",
+    armor=0.6,
+    poison_resistance=0.1,
+    range=6.0,
+    dps=1.2,
+    special_effect={"type": "raid"},
+    aggressiveness=0.8,
+    production_time=6.0,
+    speed=50.0,
+    crit_chance=0.05,
+    crit_multiplier=1.2,
+)
+
+ALL_ANT_TYPES.append(Quenquen)
+    
+
 # Map names to instances for lookup by Settings
 ANT_TYPES_BY_NAME = {t.name: t for t in ALL_ANT_TYPES}
