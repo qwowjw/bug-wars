@@ -1,18 +1,22 @@
 from .ant import Ant, AntType
 from .nest import Nest
-from typing import Optional
+from typing import Optional, List, Tuple
 
 
 class Colony:
-    def __init__(self, nest_pos, ant_type: Optional[AntType] = None):
+    def __init__(
+        self, nest_pos: Tuple[int, int], ant_type: Optional[AntType] = None
+    ) -> None:
         self.nest = Nest(nest_pos)
-        self.ants = []
+        self.ants: List[Ant] = []
         # Optional default type for newly produced ants
         self.default_ant_type: Optional[AntType] = ant_type
         # production tracking (seconds)
         self.production_progress: float = 0.0
 
-    def spawn_ant(self, pos=None, ant_type: Optional[AntType] = None):
+    def spawn_ant(
+        self, pos: Optional[Tuple[int, int]] = None, ant_type: Optional[AntType] = None
+    ) -> Ant:
         if pos is None:
             pos = self.nest.pos
         chosen_type = ant_type or self.default_ant_type
@@ -20,14 +24,19 @@ class Colony:
         self.ants.append(ant)
         return ant
 
-    def spawn_ants(self, count: int, pos=None, ant_type: Optional[AntType] = None):
+    def spawn_ants(
+        self,
+        count: int,
+        pos: Optional[Tuple[int, int]] = None,
+        ant_type: Optional[AntType] = None,
+    ) -> List[Ant]:
         """Gera várias formigas no ninho e retorna a lista criada."""
-        created = []
+        created: List[Ant] = []
         for _ in range(count):
             created.append(self.spawn_ant(pos, ant_type))
         return created
 
-    def remove_ant(self):
+    def remove_ant(self) -> Optional[Ant]:
         """Remove e retorna uma formiga do ninho (se houver), ou None caso contrário."""
         if not self.ants:
             return None

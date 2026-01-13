@@ -41,7 +41,9 @@ class TitleScene(IScene):
         # Animações de fundo poderiam vir aqui
         pass
 
-    def _draw_button(self, surface, rect, text):
+    def _draw_button(
+        self, surface: pygame.Surface, rect: pygame.Rect, text: str
+    ) -> None:
         mouse_pos = pygame.mouse.get_pos()
         color = (50, 200, 50) if rect.collidepoint(mouse_pos) else (30, 150, 30)
 

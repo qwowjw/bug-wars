@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 
 
 @dataclass
@@ -18,9 +18,12 @@ class AntType:
 
 
 class Ant:
-    def __init__(self, pos, ant_type: Optional[AntType] = None):
-        self.x, self.y = pos
-        self.dir = (1.0, 0.0)
+    def __init__(
+        self, pos: Tuple[int, int], ant_type: Optional[AntType] = None
+    ) -> None:
+        self.x: float = float(pos[0])
+        self.y: float = float(pos[1])
+        self.dir: Tuple[float, float] = (1.0, 0.0)
 
         # If provided, initialize stats from AntType, otherwise use defaults
         if ant_type is None:
@@ -39,8 +42,8 @@ class Ant:
         self.crit_multiplier = float(ant_type.crit_multiplier)
 
     @property
-    def pos(self):
+    def pos(self) -> Tuple[float, float]:
         return (self.x, self.y)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Ant(type={self.type.name}, pos=({self.x:.1f},{self.y:.1f}))"

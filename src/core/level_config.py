@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Tuple, Optional, Callable, Union
+from typing import List, Tuple, Optional, Callable, Union, Literal, TYPE_CHECKING
 from pathlib import Path
 from ai.enemy_controller import AIProfile
 
@@ -7,6 +7,12 @@ from ai.enemy_controller import AIProfile
 TextSegment = Union[str, Tuple[str, Tuple[int, int, int]]]
 # Tipo para instrução: pode ser uma linha de texto ou um caminho para imagem (ícone)
 InstructionElement = Union[TextSegment, Path]
+
+# Tipo de dono de ninho
+Owner = Literal["ally", "enemy", "empty"]
+
+if TYPE_CHECKING:
+    from entities.colony import Colony
 
 
 @dataclass(frozen=True)
@@ -29,7 +35,7 @@ class LevelConfig:
 
     randomize_positions: bool = False
     enemy_produces: bool = False
-    victory_condition: Optional[Callable] = None
+    victory_condition: Optional[Callable[[List[Owner], List["Colony"]], bool]] = None
     tutorial: Optional[TutorialConfig] = None
 
     ai_profile: Optional[AIProfile] = None

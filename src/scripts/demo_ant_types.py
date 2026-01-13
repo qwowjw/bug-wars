@@ -8,7 +8,7 @@ from entities.ant_types import ALL_ANT_TYPES
 from entities.ant import Ant
 
 
-def main():
+def main() -> None:
     for t in ALL_ANT_TYPES:
         a = Ant((0, 0), t)
         print(a, "dps=", a.dps, "speed=", a.speed, "special=", a.special_effect)

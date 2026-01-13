@@ -70,37 +70,6 @@ class SpriteRenderer:
                 if img1:
                     self.ant_sprites[(ant_type.name, 1)] = img1
 
-    def _scale_assets(self) -> None:
-        """Aplica redimensionamento nas imagens carregadas."""
-        if self.ant_frame1:
-            self.ant_frame1 = pygame.transform.scale(
-                self.ant_frame1, self.settings.ANT_SIZE
-            )
-        else:
-            self.logger.warning(
-                "Sprite 'faraoh_1.png' falhou ao carregar. Usando fallback."
-            )
-
-        if self.ant_frame2:
-            self.ant_frame2 = pygame.transform.scale(
-                self.ant_frame2, self.settings.ANT_SIZE
-            )
-
-        if self.nest_img_ally:
-            self.nest_img_ally = pygame.transform.scale(
-                self.nest_img_ally, self.settings.NEST_SIZE
-            )
-
-        if self.nest_img_empty:
-            self.nest_img_empty = pygame.transform.scale(
-                self.nest_img_empty, self.settings.NEST_SIZE
-            )
-
-        if self.nest_img_enemy:
-            self.nest_img_enemy = pygame.transform.scale(
-                self.nest_img_enemy, self.settings.NEST_SIZE
-            )
-
     def draw_ant(
         self,
         surface: pygame.Surface,

@@ -27,6 +27,7 @@ from core.level_scene import LevelScene
 from core.events import GameStartEvent, LevelCompleteEvent, CampaignStartEvent
 from core.scenes.title_scene import TitleScene
 from utils.logging_config import configure_logging
+from core.interfaces import IClock, IInputHandler, IRenderer
 
 # Adapters
 try:
@@ -54,6 +55,9 @@ def main() -> None:
     logger = logging.getLogger("main")
 
     # 3. Adapters
+    clock: IClock
+    input_handler: IInputHandler
+    renderer: IRenderer
     if config.mode == "interactive":
         if not PYGAME_INSTALLED:
             logger.critical(
@@ -114,9 +118,10 @@ def main() -> None:
             last_scene = engine.current_scene
             next_event = getattr(last_scene, "next_action", None)
 
-            if hasattr(last_scene, "result_event"):
-                if last_scene.result_event:
-                    next_event = last_scene.result_event
+            if last_scene is not None:
+                result_event = getattr(last_scene, "result_event", None)
+                if result_event:
+                    next_event = result_event
 
             # Transições
             if isinstance(next_event, GameStartEvent):

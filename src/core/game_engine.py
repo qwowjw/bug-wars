@@ -1,6 +1,6 @@
 import math
 import random
-from typing import List, Optional, Sequence, Tuple, TypedDict, Union
+from typing import Dict, List, Optional, Sequence, Tuple, TypedDict, Union
 import pygame
 from config.settings import Settings
 from rendering.sprite_renderer import SpriteRenderer
@@ -92,7 +92,7 @@ class GameEngine:
         # Cada item contém também o objeto `Ant` removido da colônia de origem.
         self.moving_ants: List[MovingAnt] = []
         # Fila de transferências pendentes para envio sequencial (origin, dest, remaining)
-        self.pending_transfers: List[dict] = []
+        self.pending_transfers: List[Dict[str, int]] = []
         self.frame_index: int = 0
         self.last_frame_toggle_ms: int = 0
 
@@ -239,7 +239,7 @@ class GameEngine:
                 # Passa o evento para detectar modificadores (Shift)
                 self._handle_mouse_click(event)
 
-    def _handle_mouse_click(self, event) -> None:
+    def _handle_mouse_click(self, event: pygame.event.Event) -> None:
         mouse_pos: Tuple[int, int] = event.pos
         mods = pygame.key.get_mods()
         shift_pressed = bool(mods & pygame.KMOD_SHIFT)
@@ -370,11 +370,14 @@ class GameEngine:
 
         # Desenha todas as formigas em movimento
         for ant in self.moving_ants:
+            ant_obj = ant["ant_obj"]
+            t_name = ant_obj.type.name
             self.sprites.draw_ant(
                 self.screen,
                 ant["position"],
                 ant["angle"],
                 self.frame_index,
+                t_name,
             )
 
         pygame.display.flip()

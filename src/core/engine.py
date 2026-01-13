@@ -4,7 +4,7 @@ Responsável pelo Loop de Jogo (Game Loop) agnóstico de plataforma.
 """
 
 import logging
-from typing import Optional, Protocol, runtime_checkable
+from typing import Any, Optional, Protocol, runtime_checkable
 
 from core.interfaces import IClock, IInputHandler, IRenderer
 from core.app_config import AppConfig
@@ -17,8 +17,8 @@ class IScene(Protocol):
     running: bool
 
     def update(self, dt: float) -> None: ...
-    def handle_event(self, event: any) -> None: ...
-    def render(self, surface: any) -> None: ...
+    def handle_event(self, event: Any) -> None: ...
+    def render(self, surface: Any) -> None: ...
 
 
 class Engine:

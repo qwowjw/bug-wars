@@ -10,7 +10,8 @@ from typing import List, Optional, Tuple, TYPE_CHECKING, Literal
 
 import pygame
 
-from entities.ant_types import AntType, ALL_ANT_TYPES
+from entities.ant import AntType
+from entities.ant_types import ALL_ANT_TYPES
 
 if TYPE_CHECKING:
     from core.level_scene import LevelScene

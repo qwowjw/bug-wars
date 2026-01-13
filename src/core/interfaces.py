@@ -2,8 +2,7 @@
 Interfaces fundamentais para abstração de I/O e Loop.
 """
 
-from typing import Protocol, Any, runtime_checkable
-from core.events import Event
+from typing import Protocol, Any, Sequence, runtime_checkable
 
 
 @runtime_checkable
@@ -23,7 +22,7 @@ class IClock(Protocol):
 class IInputHandler(Protocol):
     """Protocolo para coleta de eventos."""
 
-    def poll(self) -> list[Any]:
+    def poll(self) -> Sequence[Any]:
         """Retorna lista de eventos do sistema."""
         ...
 
@@ -32,7 +31,7 @@ class IInputHandler(Protocol):
 class IRenderer(Protocol):
     """Protocolo para renderização de cenas."""
 
-    def render(self, scene: Any, events: list[Event]) -> None:
+    def render(self, scene: Any) -> None:
         """Desenha a cena atual."""
         ...
 

@@ -10,6 +10,7 @@ from typing import (
     TypedDict,
     Union,
     Literal,
+    Dict,
     cast,
 )
 import math
@@ -46,7 +47,10 @@ class MovingAnt(TypedDict):
     owner: Owner
 
 
-def default_victory_condition(owners: List[Owner], colonies: List[Colony]) -> bool:
+def default_victory_condition(
+    owners: Sequence[str],
+    colonies: Sequence[Colony],
+) -> bool:
     return all(o == "ally" for o in owners)
 
 
@@ -103,7 +107,7 @@ class LevelScene:
                 )
 
         # Owners and colonies
-        self.owners: List[Owner] = list(self.config.initial_owners)
+        self.owners: List[Owner] = [cast(Owner, o) for o in self.config.initial_owners]
         self.colonies: List[Colony] = []
         type_names = self.config.ant_types or [
             self.settings.DEFAULT_ANT_TYPE_NAME
@@ -128,7 +132,7 @@ class LevelScene:
         # Support multi-selection of ally nests
         self.selected_nest_indices: set[int] = set()
         self.moving_ants: List[MovingAnt] = []
-        self.pending_transfers: List[dict] = []  # {origin, dest, remaining}
+        self.pending_transfers: List[Dict[str, int]] = []  # {origin, dest, remaining}
         self.frame_index: int = 0
         self.last_frame_toggle_ms: int = 0
 
@@ -409,7 +413,7 @@ class LevelScene:
         elif event.type == pygame.MOUSEBUTTONDOWN:
             self._handle_mouse_click(event)
 
-    def _handle_mouse_click(self, event) -> None:
+    def _handle_mouse_click(self, event: pygame.event.Event) -> None:
         mouse_pos: Tuple[int, int] = event.pos
         mods = pygame.key.get_mods()
         shift_pressed = bool(mods & pygame.KMOD_SHIFT)

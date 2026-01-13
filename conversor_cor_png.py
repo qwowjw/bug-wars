@@ -1,5 +1,6 @@
 from pathlib import Path
 from PIL import Image
+from typing import Tuple, cast
 
 
 SPRITES_DIR = Path("assets/sprites/buttons")
@@ -8,11 +9,13 @@ SPRITES_DIR = Path("assets/sprites/buttons")
 def convert_png_to_white(path: Path) -> None:
     img = Image.open(path).convert("RGBA")
     pixels = img.load()
+    assert pixels is not None
 
     width, height = img.size
     for y in range(height):
         for x in range(width):
-            r, g, b, a = pixels[x, y]
+            pixel = cast(Tuple[int, int, int, int], pixels[x, y])
+            r, g, b, a = pixel
             if a != 0:  # mantém pixels transparentes intactos
                 pixels[x, y] = (255, 255, 255, a)
 
