@@ -1,95 +1,151 @@
-import os
+"""
+Ponto de entrada (Entrypoint) da aplicação Ant Simulator.
+Responsável pelo bootstrap, injeção de dependências e inicialização do Engine.
+
+Uso:
+    python src/main.py [--headless]
+"""
+
 import sys
 import logging
+import os
 
-try:
-    import pygame  # type: ignore
-    PYGAME_AVAILABLE = True
-except ModuleNotFoundError:
-    PYGAME_AVAILABLE = False
-
-# Headless if env var set or `--headless` passed
-FORCE_HEADLESS = os.getenv("ANT_SIM_HEADLESS") == "1" or "--headless" in sys.argv
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config.settings import Settings
+from core.app_config import AppConfig
+from core.engine import Engine
+from core.levels_intro import (
+    create_intro_config,
+    create_intro2_config,
+    create_intro3_config,
+)
+from core.levels_campaign import (
+    create_level_1_config,)
+from core.level_scene import LevelScene
+from core.events import GameStartEvent, LevelCompleteEvent
+from core.scenes.title_scene import TitleScene
 from utils.logging_config import configure_logging
 
-# configure logging early
-configure_logging(level=Settings.LOG_LEVEL)
+# Adapters
+try:
+    from adapters.pygame_adapter import PygameClock, PygameInput, PygameRenderer
+    PYGAME_INSTALLED = True
+except ImportError:
+    PYGAME_INSTALLED = False
 
-if PYGAME_AVAILABLE and not FORCE_HEADLESS:
-    from core.scene_manager import SceneManager
-    from core.level_scene import LevelScene
-    from core.levels import create_intro_config, create_level1_config, create_level2_config
+from adapters.headless_adapter import HeadlessClock, HeadlessInput, HeadlessRenderer
 
-    def main():
-        logging.getLogger(__name__).info("Starting game (interactive mode)")
-        pygame.init()
-        settings = Settings()
-        screen = pygame.display.set_mode((settings.WIDTH, settings.HEIGHT))
-        pygame.display.set_caption(settings.WINDOW_TITLE)
 
-        manager = SceneManager()
+def main() -> None:
+    # 1. Configuração de ambiente
+    config = AppConfig.from_env()
 
-        intro_cfg = create_intro_config(settings)
-        level1_cfg = create_level1_config(settings)
-        level2_cfg = create_level2_config(settings)
+    # 2. Logging
+    log_level_map = {
+        "DEBUG": logging.DEBUG,
+        "INFO": logging.INFO,
+        "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR,
+    }
+    configure_logging(level=log_level_map.get(config.log_level, logging.INFO))
+    logger = logging.getLogger("main")
 
-        # Run intro
-        intro_scene = LevelScene(screen, settings, intro_cfg)
-        manager.set_scene(intro_scene)
-        intro_scene.run()
+    # 3. Adapters
+    if config.mode == "interactive":
+        if not PYGAME_INSTALLED:
+            logger.critical("Modo interativo solicitado, mas pygame não está instalado.")
+            sys.exit(1)
 
-        # On victory, transition to level1 then level2
-        if not intro_scene.running:
-            logging.getLogger(__name__).info("Transitioning to level1")
-            level1_scene = LevelScene(screen, settings, level1_cfg)
-            manager.set_scene(level1_scene)
-            level1_scene.run()
+        logger.info("Inicializando Pygame...")
+        clock = PygameClock()
+        input_handler = PygameInput()
+        renderer = PygameRenderer(config.width, config.height, Settings.WINDOW_TITLE)
+        screen_surface = renderer.screen
+    else:
+        logger.info("Inicializando modo headless...")
+        clock = HeadlessClock(fixed_dt=0.016)
+        input_handler = HeadlessInput()
+        renderer = HeadlessRenderer()
 
-            if not level1_scene.running:
-                logging.getLogger(__name__).info("Transitioning to level2")
-                level2_scene = LevelScene(screen, settings, level2_cfg)
-                manager.set_scene(level2_scene)
-                level2_scene.run()
+        import pygame
+        screen_surface = pygame.Surface((config.width, config.height))
 
-        pygame.quit()
+    # 4. Engine
+    try:
+        engine = Engine(
+            config=config,
+            clock=clock,
+            input_handler=input_handler,
+            renderer=renderer,
+        )
 
-else:
-    # Headless/demo mode: run a simple simulation of the intro level production
-    from core.levels import create_intro_config
-    from entities.colony import Colony
-    from entities.ant_types import farao
+        game_settings = Settings()
 
-    def main():
-        logging.getLogger(__name__).info("Running in headless demo mode")
-        settings = Settings()
-        cfg = create_intro_config(settings)
+        # Definição do tutorial
+        tutorial_creators = [
+            create_intro_config,
+            create_intro2_config,
+            create_intro3_config,
+        ]
+        
+        # Definição da campanha completa
+        level_creators = [
+            create_intro_config,
+            create_intro2_config,
+            create_intro3_config,
+        ]
+        
+        current_level_index = 0
 
-        colonies = []
-        for idx, pos in enumerate(cfg.nest_positions):
-            ant_type = farao
-            col = Colony(pos, ant_type=ant_type)
-            if cfg.initial_owners[idx] != "empty" and cfg.initial_counts[idx] > 0:
-                col.spawn_ants(int(cfg.initial_counts[idx]))
-            colonies.append(col)
+        # Cena inicial: Title
+        title_scene = TitleScene(screen_surface)
+        engine.set_scene(title_scene)
 
-        # simple production loop (safe to parallelize in real run)
-        dt = 0.5
-        elapsed = 0.0
-        timeout = 10.0
-        while elapsed < timeout:
-            produced = 0
-            for c in colonies:
-                produced += c.update(dt)
-            logging.getLogger(__name__).debug("Headless tick produced=%d", produced)
-            # victory condition: all nests have at least one ally ant
-            if all(len(c.ants) > 0 for c in colonies):
-                logging.getLogger(__name__).info("Headless: victory achieved")
+        logger.info("Sistema pronto. Iniciando loop principal.")
+
+        # 5. Loop de orquestração de cenas
+        while True:
+            engine.run()
+
+            last_scene = engine.current_scene
+            next_event = getattr(last_scene, "next_action", None)
+
+            if hasattr(last_scene, "result_event"):
+                if last_scene.result_event:
+                    next_event = last_scene.result_event
+
+            # Transições
+            if isinstance(next_event, GameStartEvent):
+                current_level_index = 0
+                cfg = tutorial_creators[current_level_index](game_settings)
+                engine.set_scene(
+                    LevelScene(screen_surface, game_settings, cfg)
+                )
+
+            elif isinstance(next_event, LevelCompleteEvent):
+                current_level_index += 1
+
+                if current_level_index < len(tutorial_creators):
+                    cfg = tutorial_creators[current_level_index](game_settings)
+                    engine.set_scene(
+                        LevelScene(screen_surface, game_settings, cfg)
+                    )
+                else:
+                    logger.info("Campanha finalizada. Retornando ao título.")
+                    title_scene = TitleScene(screen_surface)                    
+                    engine.set_scene(title_scene)
+
+            else:
+                # Cena terminou sem evento explícito (quit real)
                 break
-            elapsed += dt
 
-        logging.getLogger(__name__).info("Headless demo finished")
+    except Exception:
+        logger.exception("Aplicação encerrada inesperadamente.")
+        sys.exit(1)
+
+    sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

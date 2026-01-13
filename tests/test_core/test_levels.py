@@ -1,7 +1,7 @@
 import pytest
 
 from config.settings import Settings
-from core.levels import create_intro_config, create_level1_config, create_level2_config
+from core.levels import create_intro_config, create_intro2_config, create_intro3_config
 from core.level_scene import default_victory_condition
 
 
@@ -14,18 +14,18 @@ def test_intro_config_structure():
     assert len(cfg.initial_owners) == 4
 
 
-def test_level1_config_triangle():
+def test_intro2_config_triangle():
     settings = Settings()
-    cfg = create_level1_config(settings)
-    assert cfg.name == "level1"
+    cfg = create_intro2_config(settings)
+    assert cfg.name == "intro2"
     assert len(cfg.nest_positions) == 3
     assert cfg.initial_owners.count("ally") == 2
 
 
-def test_level2_config_diamond():
+def test_intro3_config_diamond():
     settings = Settings()
-    cfg = create_level2_config(settings)
-    assert cfg.name == "level2"
+    cfg = create_intro3_config(settings)
+    assert cfg.name == "intro3"
     assert len(cfg.nest_positions) == 4
     assert cfg.initial_owners.count("ally") == 1
     assert cfg.initial_owners.count("enemy") == 1

@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional, Sequence, Tuple, TypedDict, Union, Literal, cast
+from typing import Any, Callable, List, Optional, Sequence, Tuple, TypedDict, Union, Literal, cast
 import math
 import random
 import concurrent.futures
+from core.level_config import LevelConfig
+from rendering.ui_helper import render_rich_text_line
+from core.events import Event, LevelCompleteEvent
 
 import pygame
 
@@ -129,7 +132,8 @@ class LevelScene:
                 self.colonies[i].spawn_ants(int(c))
 
         # Selection and movement state
-        self.selected_nest_index: Optional[int] = None
+        # Support multi-selection of ally nests
+        self.selected_nest_indices: set[int] = set()
         self.moving_ants: List[MovingAnt] = []
         self.pending_transfers: List[dict] = []  # {origin, dest, remaining}
         self.frame_index: int = 0
@@ -141,6 +145,13 @@ class LevelScene:
         self._thread_workers = workers
 
         self.logger.info("Level '%s' initialized with %d nests", self.config.name, len(self.nest_positions))
+
+        # Estado do jogo
+        self.state: str = "tutorial" if getattr(self.config, "tutorial", None) else "playing"
+
+        self.tutorial_font = pygame.font.SysFont("arial", 24)
+        self.completed: bool = False
+
 
     # -------------- Utility helpers --------------
     def _calculate_rotation_angle(self, origin: Union[Sequence[float], pygame.Vector2], destination: Union[Sequence[float], pygame.Vector2]) -> float:
@@ -397,38 +408,55 @@ class LevelScene:
             self.logger.exception("Error during enemy AI raid checks")
 
     # -------------- Input handling --------------
-    def handle_event(self, event) -> None:
+    def handle_event(self, event: Any) -> None:
+        if self.state == "tutorial":
+            if event.type in (pygame.MOUSEBUTTONDOWN, pygame.KEYDOWN):
+                self.state = "playing"
+            return
+
         if event.type == pygame.QUIT:
             self.running = False
         elif event.type == pygame.MOUSEBUTTONDOWN:
             self._handle_mouse_click(event)
 
+
     def _handle_mouse_click(self, event) -> None:
         mouse_pos: Tuple[int, int] = event.pos
         mods = pygame.key.get_mods()
         shift_pressed = bool(mods & pygame.KMOD_SHIFT)
+        ctrl_pressed = bool(mods & (pygame.KMOD_CTRL | pygame.KMOD_META))
 
         for index, rect in enumerate(self.nest_rects):
-            if rect.collidepoint(mouse_pos):
-                # cancel if clicking the already selected nest
-                if self.selected_nest_index == index:
-                    self.pending_transfers = [t for t in self.pending_transfers if t["origin"] != index]
-                    self.selected_nest_index = None
+            if not rect.collidepoint(mouse_pos):
+                continue
+
+            owner = self.owners[index]
+            colony = self.colonies[index]
+
+            # If clicking on an ally nest with ants: handle selection logic
+            if owner == "ally" and len(colony.ants) > 0:
+                if ctrl_pressed:
+                    # Toggle selection with Ctrl (or Cmd)
+                    if index in self.selected_nest_indices:
+                        self.selected_nest_indices.remove(index)
+                    else:
+                        self.selected_nest_indices.add(index)
+                    return
+                else:
+                    # Without Ctrl: replace selection with this single nest
+                    self.selected_nest_indices = {index}
                     return
 
-                # select origin if ally and has ants
-                if self.selected_nest_index is None:
-                    if self.owners[index] == "ally" and len(self.colonies[index].ants) > 0:
-                        self.selected_nest_index = index
-                else:
-                    origin_idx = int(self.selected_nest_index)
+            # Otherwise, treat as destination if we have any selected origins
+            if self.selected_nest_indices:
+                # Shift on destination click still means: send one ant per selected origin
+                for origin_idx in list(self.selected_nest_indices):
                     origin_owner = self.owners[origin_idx]
                     if origin_owner != "ally":
-                        self.selected_nest_index = None
-                        return
-
+                        continue
                     origin_colony = self.colonies[origin_idx]
                     if shift_pressed:
+                        # send a single ant immediately
                         self._start_ant_movement(origin_idx, index, origin_owner)
                     else:
                         available = len(origin_colony.ants)
@@ -438,8 +466,12 @@ class LevelScene:
                                 "dest": index,
                                 "remaining": available,
                             })
-                    self.selected_nest_index = None
-                break
+                # Clear selection after issuing the command
+                self.selected_nest_indices.clear()
+                return
+
+            # Nothing to do if clicked elsewhere without a valid selection
+            return
 
     # -------------- Render --------------
     def _render_ant_count(self, index: int, rect: pygame.Rect) -> None:
@@ -462,8 +494,8 @@ class LevelScene:
                 state = "empty"
             self.sprites.draw_nest(target, pos, state=state)
 
-            # selection ring
-            if self.selected_nest_index == i:
+            # selection ring (support multi-select)
+            if i in self.selected_nest_indices:
                 pygame.draw.circle(
                     target,
                     self.settings.SELECTION_COLOR,
@@ -489,41 +521,88 @@ class LevelScene:
         for ant in self.moving_ants:
             self.sprites.draw_ant(target, ant["position"], ant["angle"], self.frame_index)
 
+        if self.state == "tutorial" and getattr(self.config, "tutorial", None):
+            self._render_tutorial_overlay(target)
+
+
         pygame.display.flip()
+
+    def _render_tutorial_overlay(self, surface: pygame.Surface) -> None:
+        overlay = pygame.Surface(
+            (self.settings.WIDTH, self.settings.HEIGHT),
+            pygame.SRCALPHA
+        )
+        overlay.fill((0, 0, 0, 200))
+        surface.blit(overlay, (0, 0))
+
+        tutorial = self.config.tutorial
+        if not tutorial:
+            return
+
+        title_font = pygame.font.SysFont("arial", 40, bold=True)
+        title_surf = title_font.render(tutorial.title, True, (255, 255, 0))
+        title_rect = title_surf.get_rect(
+            center=(self.settings.WIDTH // 2, 80)
+        )
+        surface.blit(title_surf, title_rect)
+
+        start_x = 100
+        start_y = 150
+
+        for line in tutorial.lines:
+            h = render_rich_text_line(
+                surface,
+                line,
+                (start_x, start_y),
+                self.tutorial_font
+            )
+            start_y += h + 15
+
+        cont_surf = self.tutorial_font.render(
+            "Clique para iniciar...",
+            True,
+            (150, 150, 150)
+        )
+        cont_rect = cont_surf.get_rect(
+            center=(self.settings.WIDTH // 2, self.settings.HEIGHT - 50)
+        )
+        surface.blit(cont_surf, cont_rect)
+
+    # -------------- Update --------------
+# ... (Mantenha o resto da classe como estava até chegar no método update)
 
     # -------------- Update --------------
     def update(self, dt: float) -> None:
+        """
+        Atualiza a lógica do jogo.
+        O Engine chama este método a cada frame.
+        """
+        if self.state == "tutorial":
+            return
+
+        # 1. Processa a fila de transferências pendentes (lógica de envio)
+        # Tenta disparar uma formiga por frame se houver pendências
         self._process_pending_transfers()
+
+        # 2. Atualiza produção nas colônias (nascimento de novas formigas)
         self._update_production(dt)
+
+        # 3. Atualiza animação dos sprites (troca de frames)
         if self.moving_ants:
-            self._update_sprite_animation()
+             self._update_sprite_animation()
+
+        # 4. Atualiza física/movimento das formigas (deslocamento e colisão)
         self._update_ant_movement()
 
-        # Victory check
+        # 5. Verifica condição de vitória
         vc = self.config.victory_condition or default_victory_condition
         if vc(self.owners, self.colonies):
-            self.logger.info("Level '%s' completed", self.config.name)
+            self.completed = True
             self.running = False
+            self.logger.info("Level '%s' completed", self.config.name)
 
-    # -------------- Convenience run loop --------------
-    def run(self) -> None:
-        """Optional self-contained loop to run the scene directly.
-
-        Note: Rendering must stay on the main thread; production may be parallelized.
-        """
-        while self.running:
-            for event in pygame.event.get():
-                self.handle_event(event)
-
-            dt = self.clock.get_time() / 1000.0
-            try:
-                self.update(dt)
-            except Exception:  # robust against runtime errors in systems
-                self.logger.exception("Error during update loop")
-
-            try:
-                self.render()
-            except Exception:
-                self.logger.exception("Error during render")
-
-            self.clock.tick(self.settings.FPS)
+    @property
+    def result_event(self) -> Optional[Event]:
+        if self.completed:
+            return LevelCompleteEvent(level_name=self.config.name)
+        return None
