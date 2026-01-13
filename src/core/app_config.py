@@ -14,6 +14,7 @@ RunMode = Literal["interactive", "headless"]
 @dataclass(frozen=True)
 class AppConfig:
     """Configuração de runtime da aplicação."""
+
     mode: RunMode
     width: int
     height: int
@@ -49,5 +50,5 @@ class AppConfig:
             height=height,
             fps=fps,
             log_level=os.getenv("ANT_SIM_LOG_LEVEL", "INFO").upper(),
-            headless_timeout=timeout
+            headless_timeout=timeout,
         )

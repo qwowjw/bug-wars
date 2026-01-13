@@ -13,7 +13,9 @@ from core.app_config import AppConfig
 @runtime_checkable
 class IScene(Protocol):
     """Protocolo que uma Cena deve implementar para rodar no Engine."""
+
     running: bool
+
     def update(self, dt: float) -> None: ...
     def handle_event(self, event: any) -> None: ...
     def render(self, surface: any) -> None: ...
@@ -51,7 +53,7 @@ class Engine:
 
         self.logger.info("Iniciando Engine no modo: %s", self.config.mode)
         self._running = True
-        
+
         # Controle de segurança para modo headless (timeout)
         start_time = self.clock.get_time()
 
@@ -64,14 +66,15 @@ class Engine:
                 events = self.input_handler.poll()
                 for event in events:
                     # Permite que o Engine intercepte Quit global, se necessário
-                    if hasattr(event, 'type'):
+                    if hasattr(event, "type"):
                         # Pequeno acoplamento com estrutura de evento pygame
                         # para manter compatibilidade com sistemas existentes,
                         # mas poderia ser abstraído.
                         import pygame
+
                         if event.type == pygame.QUIT:
                             self._running = False
-                    
+
                     self.current_scene.handle_event(event)
 
                 # 3. Update (Lógica)
@@ -84,7 +87,9 @@ class Engine:
                 if self.config.mode == "headless":
                     elapsed = (self.clock.get_time() - start_time) / 1000.0
                     if elapsed > self.config.headless_timeout:
-                        self.logger.info("Headless: Timeout atingido (%.1fs). Encerrando.", elapsed)
+                        self.logger.info(
+                            "Headless: Timeout atingido (%.1fs). Encerrando.", elapsed
+                        )
                         self._running = False
 
         except KeyboardInterrupt:
@@ -94,7 +99,7 @@ class Engine:
             raise
         finally:
             self.logger.info("Cena finalizada ou Engine pausado.")
-            
+
     def shutdown(self) -> None:
         """Encerra explicitamente os recursos do engine."""
         self.logger.info("Shutdown do Engine solicitado.")

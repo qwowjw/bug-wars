@@ -1,4 +1,3 @@
-import time
 from entities.colony import Colony
 from entities.ant_types import farao
 

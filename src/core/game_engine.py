@@ -31,7 +31,9 @@ class GameEngine:
         self.font: pygame.font.Font = pygame.font.SysFont(None, self.settings.FONT_SIZE)
 
         # Carrega posições dos ninhos a partir de Settings (fácil configuração)
-        configured_positions = getattr(self.settings, "NEST_POSITIONS", [(200, 200), (600, 200)])
+        configured_positions = getattr(
+            self.settings, "NEST_POSITIONS", [(200, 200), (600, 200)]
+        )
         # Garante tuplas e tipagem estrita
         self.nest_positions: List[Vec2] = [tuple(pos) for pos in configured_positions]
 
@@ -49,7 +51,9 @@ class GameEngine:
             w, h = self.settings.NEST_SIZE
             half_w, half_h = w // 2, h // 2
             for pos in self.nest_positions:
-                self.nest_rects.append(pygame.Rect(pos[0] - half_w, pos[1] - half_h, w, h))
+                self.nest_rects.append(
+                    pygame.Rect(pos[0] - half_w, pos[1] - half_h, w, h)
+                )
 
         # Inicializa colônias (usa objetos Colony em vez de contadores simples)
         # Usa tipos configuráveis via Settings: INITIAL_ANT_TYPE_PER_NEST ou DEFAULT_ANT_TYPE_NAME
@@ -66,8 +70,12 @@ class GameEngine:
             self.colonies.append(Colony(pos, ant_type=ant_type))
 
         # Preenche as colônias com formigas iniciais conforme Settings
-        initial_counts = getattr(self.settings, "INITIAL_ANTS_PER_NEST", [1] * len(self.nest_positions))
-        if isinstance(initial_counts, list) and len(initial_counts) >= len(self.colonies):
+        initial_counts = getattr(
+            self.settings, "INITIAL_ANTS_PER_NEST", [1] * len(self.nest_positions)
+        )
+        if isinstance(initial_counts, list) and len(initial_counts) >= len(
+            self.colonies
+        ):
             counts = initial_counts[: len(self.colonies)]
         elif isinstance(initial_counts, list) and len(initial_counts) > 0:
             counts = [initial_counts[0]] * len(self.colonies)
@@ -88,7 +96,11 @@ class GameEngine:
         self.frame_index: int = 0
         self.last_frame_toggle_ms: int = 0
 
-    def _calculate_rotation_angle(self, origin: Union[Sequence[float], pygame.Vector2], destination: Union[Sequence[float], pygame.Vector2]) -> float:
+    def _calculate_rotation_angle(
+        self,
+        origin: Union[Sequence[float], pygame.Vector2],
+        destination: Union[Sequence[float], pygame.Vector2],
+    ) -> float:
         dx = destination[0] - origin[0]
         dy = destination[1] - origin[1]
         if dx == 0 and dy == 0:
@@ -101,7 +113,9 @@ class GameEngine:
         w, h = self.settings.ANT_SIZE
         return pygame.Rect(int(pos.x - w // 2), int(pos.y - h // 2), w, h)
 
-    def _start_ant_movement(self, origin_index: int, dest_index: int, offset_index: int = 0) -> None:
+    def _start_ant_movement(
+        self, origin_index: int, dest_index: int, offset_index: int = 0
+    ) -> None:
         # Inicia movimento de uma formiga do ninho de origem para o destino
         if origin_index < 0 or origin_index >= len(self.nest_positions):
             return
@@ -142,8 +156,13 @@ class GameEngine:
         candidate_pos = origin - dir_norm * spacing * candidate_offset
         candidate_rect = self._ant_rect_from_pos(candidate_pos)
 
-        existing_rects = [self._ant_rect_from_pos(a["position"]) for a in self.moving_ants]
-        while any(candidate_rect.colliderect(r) for r in existing_rects) and attempt < max_attempts:
+        existing_rects = [
+            self._ant_rect_from_pos(a["position"]) for a in self.moving_ants
+        ]
+        while (
+            any(candidate_rect.colliderect(r) for r in existing_rects)
+            and attempt < max_attempts
+        ):
             attempt += 1
             candidate_offset += 1
             candidate_pos = origin - dir_norm * spacing * candidate_offset
@@ -168,7 +187,6 @@ class GameEngine:
         if now - self.last_frame_toggle_ms >= self.settings.ANIM_INTERVAL_MS:
             self.frame_index = 1 - self.frame_index
             self.last_frame_toggle_ms = now
-
 
     def _update_ant_movement(self) -> None:
         # Atualiza todas as formigas em movimento
@@ -213,7 +231,6 @@ class GameEngine:
             direction.scale_to_length(self.settings.SPEED)
             ant["position"] += direction
 
-
     def _handle_events(self) -> None:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -232,7 +249,9 @@ class GameEngine:
                 # CASO 1: Cancelar envios se clicar no ninho que já estava selecionado
                 if self.selected_nest_index == index:
                     # Remove todas as transferências que têm este ninho como origem
-                    self.pending_transfers = [t for t in self.pending_transfers if t["origin"] != index]
+                    self.pending_transfers = [
+                        t for t in self.pending_transfers if t["origin"] != index
+                    ]
                     self.selected_nest_index = None
                     return
 
@@ -240,31 +259,33 @@ class GameEngine:
                 if self.selected_nest_index is None:
                     if len(self.colonies[index].ants) > 0:
                         self.selected_nest_index = index
-                
+
                 # CASO 3: Definir destino
                 else:
                     origin_idx = self.selected_nest_index
                     origin_colony = self.colonies[origin_idx]
-                    
+
                     if shift_pressed:
                         self._start_ant_movement(origin_idx, index)
                     else:
                         available = len(origin_colony.ants)
                         if available > 0:
                             # Adiciona nova transferência sem bloquear as existentes
-                            self.pending_transfers.append({
-                                "origin": origin_idx, 
-                                "dest": index, 
-                                "remaining": available
-                            })
-                    
+                            self.pending_transfers.append(
+                                {
+                                    "origin": origin_idx,
+                                    "dest": index,
+                                    "remaining": available,
+                                }
+                            )
+
                     # Limpa seleção para permitir selecionar outra origem ou o mesmo novamente
                     self.selected_nest_index = None
                 break
 
     def _process_pending_transfers(self) -> None:
         """Processa transferências pendentes permitindo envios simultâneos para destinos diferentes.
-        
+
         Notes:
             Itera por todas as transferências pendentes e verifica se há espaço
             na direção específica de cada destino. Isso permite que um mesmo
@@ -288,32 +309,37 @@ class GameEngine:
             origin_pos: pygame.Vector2 = pygame.Vector2(self.nest_positions[origin_idx])
             dest_pos: pygame.Vector2 = pygame.Vector2(self.nest_positions[dest_idx])
             direction: pygame.Vector2 = dest_pos - origin_pos
-            dir_norm: pygame.Vector2 = direction.normalize() if direction.length() != 0 else pygame.Vector2(1, 0)
-            
+            dir_norm: pygame.Vector2 = (
+                direction.normalize()
+                if direction.length() != 0
+                else pygame.Vector2(1, 0)
+            )
+
             # Posição inicial deslocada na direção do destino
             spawn_offset: int = spacing * 2
             candidate_pos: pygame.Vector2 = origin_pos + dir_norm * spawn_offset
             candidate_rect: pygame.Rect = self._ant_rect_from_pos(candidate_pos)
 
             # Verifica colisão apenas com formigas já em movimento
-            existing_rects: List[pygame.Rect] = [self._ant_rect_from_pos(a["position"]) for a in self.moving_ants]
-            
+            existing_rects: List[pygame.Rect] = [
+                self._ant_rect_from_pos(a["position"]) for a in self.moving_ants
+            ]
+
             # Se não houver colisão nesta direção específica, despacha a formiga
             if not any(candidate_rect.colliderect(r) for r in existing_rects):
                 self._start_ant_movement(origin_idx, dest_idx, 0)
                 transfer["remaining"] -= 1
-                
+
                 if transfer["remaining"] <= 0:
                     self.pending_transfers.remove(transfer)
 
-
     def _render_ant_count(self, index: int, rect: pygame.Rect) -> None:
         """Renderiza a contagem de formigas no ninho.
-        
+
         Args:
             index: Índice do ninho na lista de colônias.
             rect: Retângulo do ninho para posicionamento do texto.
-        
+
         Notes:
             Mostra apenas as formigas que já estão fisicamente no ninho,
             sem contar as que estão em trânsito.
@@ -341,7 +367,7 @@ class GameEngine:
             # contagem abaixo
             rect = self.nest_rects[i]
             self._render_ant_count(i, rect)
-            
+
         # Desenha todas as formigas em movimento
         for ant in self.moving_ants:
             self.sprites.draw_ant(

@@ -1,4 +1,3 @@
-import time
 from typing import Any, List
 from core.interfaces import IClock, IInputHandler, IRenderer
 

@@ -21,15 +21,17 @@ from core.levels_intro import (
     create_intro3_config,
 )
 from core.levels_campaign import (
-    create_level_1_config,)
+    create_level_1_config,
+)
 from core.level_scene import LevelScene
-from core.events import GameStartEvent, LevelCompleteEvent
+from core.events import GameStartEvent, LevelCompleteEvent, CampaignStartEvent
 from core.scenes.title_scene import TitleScene
 from utils.logging_config import configure_logging
 
 # Adapters
 try:
     from adapters.pygame_adapter import PygameClock, PygameInput, PygameRenderer
+
     PYGAME_INSTALLED = True
 except ImportError:
     PYGAME_INSTALLED = False
@@ -54,7 +56,9 @@ def main() -> None:
     # 3. Adapters
     if config.mode == "interactive":
         if not PYGAME_INSTALLED:
-            logger.critical("Modo interativo solicitado, mas pygame não está instalado.")
+            logger.critical(
+                "Modo interativo solicitado, mas pygame não está instalado."
+            )
             sys.exit(1)
 
         logger.info("Inicializando Pygame...")
@@ -69,6 +73,7 @@ def main() -> None:
         renderer = HeadlessRenderer()
 
         import pygame
+
         screen_surface = pygame.Surface((config.width, config.height))
 
     # 4. Engine
@@ -88,14 +93,12 @@ def main() -> None:
             create_intro2_config,
             create_intro3_config,
         ]
-        
+
         # Definição da campanha completa
         level_creators = [
-            create_intro_config,
-            create_intro2_config,
-            create_intro3_config,
+            create_level_1_config,
         ]
-        
+
         current_level_index = 0
 
         # Cena inicial: Title
@@ -117,24 +120,25 @@ def main() -> None:
 
             # Transições
             if isinstance(next_event, GameStartEvent):
+                active_creators = tutorial_creators
                 current_level_index = 0
-                cfg = tutorial_creators[current_level_index](game_settings)
-                engine.set_scene(
-                    LevelScene(screen_surface, game_settings, cfg)
-                )
+                cfg = active_creators[current_level_index](game_settings)
+                engine.set_scene(LevelScene(screen_surface, game_settings, cfg))
+
+            elif isinstance(next_event, CampaignStartEvent):
+                active_creators = level_creators
+                current_level_index = 0
+                cfg = active_creators[current_level_index](game_settings)
+                engine.set_scene(LevelScene(screen_surface, game_settings, cfg))
 
             elif isinstance(next_event, LevelCompleteEvent):
                 current_level_index += 1
 
-                if current_level_index < len(tutorial_creators):
-                    cfg = tutorial_creators[current_level_index](game_settings)
-                    engine.set_scene(
-                        LevelScene(screen_surface, game_settings, cfg)
-                    )
+                if current_level_index < len(active_creators):
+                    cfg = active_creators[current_level_index](game_settings)
+                    engine.set_scene(LevelScene(screen_surface, game_settings, cfg))
                 else:
-                    logger.info("Campanha finalizada. Retornando ao título.")
-                    title_scene = TitleScene(screen_surface)                    
-                    engine.set_scene(title_scene)
+                    engine.set_scene(TitleScene(screen_surface))
 
             else:
                 # Cena terminou sem evento explícito (quit real)

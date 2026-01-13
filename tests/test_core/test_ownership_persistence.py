@@ -1,5 +1,4 @@
 import pygame
-import pytest
 import sys
 from pathlib import Path
 

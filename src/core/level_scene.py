@@ -1,14 +1,27 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Any, Callable, List, Optional, Sequence, Tuple, TypedDict, Union, Literal, cast
+from typing import (
+    Any,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    TypedDict,
+    Union,
+    Literal,
+    cast,
+)
 import math
 import random
 import concurrent.futures
 from core.level_config import LevelConfig
 from rendering.ui_helper import render_rich_text_line
 from core.events import Event, LevelCompleteEvent
+from ai.enemy_controller import (
+    EnemyController,
+    AI_BALANCED,
+)
 
 import pygame
 
@@ -33,40 +46,6 @@ class MovingAnt(TypedDict):
     owner: Owner
 
 
-@dataclass(frozen=True)
-class LevelConfig:
-    """Configuration for a single level.
-
-    Attributes:
-        name: Level name (for logging/transition).
-        nest_positions: Positions of each nest.
-        initial_counts: Initial ant counts per nest (parallel to positions).
-        initial_owners: Owner per nest: 'ally' | 'enemy' | 'empty'.
-        ant_types: Optional list with ant type names per nest. If None, uses Settings.DEFAULT_ANT_TYPE_NAME.
-        randomize_positions: Whether to shuffle nest positions at load time.
-        enemy_produces: If True, enemy colonies produce ants passively.
-        victory_condition: Optional callable to compute victory. If None, defaults to all nests ally.
-    """
-
-    name: str
-    nest_positions: List[Vec2]
-    initial_counts: List[int]
-    initial_owners: List[Owner]
-    ant_types: Optional[List[str]] = None
-    randomize_positions: bool = False
-    enemy_produces: bool = False
-    victory_condition: Optional[Callable[[List[Owner], List[Colony]], bool]] = None
-
-    def validate(self) -> None:
-        n = len(self.nest_positions)
-        if len(self.initial_counts) != n:
-            raise ValueError("initial_counts length must match nest_positions")
-        if len(self.initial_owners) != n:
-            raise ValueError("initial_owners length must match nest_positions")
-        if self.ant_types is not None and len(self.ant_types) != n:
-            raise ValueError("ant_types length must match nest_positions when provided")
-
-
 def default_victory_condition(owners: List[Owner], colonies: List[Colony]) -> bool:
     return all(o == "ally" for o in owners)
 
@@ -87,7 +66,9 @@ class LevelScene:
     Keep the main loop simple and low-allocation; avoid creating objects in hot paths.
     """
 
-    def __init__(self, screen: pygame.Surface, settings: Settings, config: LevelConfig) -> None:
+    def __init__(
+        self, screen: pygame.Surface, settings: Settings, config: LevelConfig
+    ) -> None:
         self.logger = logging.getLogger(__name__)
         self.clock: pygame.time.Clock = pygame.time.Clock()
         self.settings: Settings = settings
@@ -99,13 +80,17 @@ class LevelScene:
         self.config: LevelConfig = config
 
         # Setup nest positions
-        self.nest_positions: List[Vec2] = [cast(Vec2, tuple(p)) for p in self.config.nest_positions]
+        self.nest_positions: List[Vec2] = [
+            cast(Vec2, tuple(p)) for p in self.config.nest_positions
+        ]
         if self.config.randomize_positions:
             random.shuffle(self.nest_positions)
 
         # Build rects for input/render alignment
         self.nest_rects: List[pygame.Rect] = []
-        nest_img = getattr(self.sprites, "nest_img_ally", None) or getattr(self.sprites, "nest_img_empty", None)
+        nest_img = getattr(self.sprites, "nest_img_ally", None) or getattr(
+            self.sprites, "nest_img_empty", None
+        )
         if nest_img:
             for pos in self.nest_positions:
                 self.nest_rects.append(nest_img.get_rect(center=pos))
@@ -113,15 +98,23 @@ class LevelScene:
             w, h = self.settings.NEST_SIZE
             half_w, half_h = w // 2, h // 2
             for pos in self.nest_positions:
-                self.nest_rects.append(pygame.Rect(pos[0] - half_w, pos[1] - half_h, w, h))
+                self.nest_rects.append(
+                    pygame.Rect(pos[0] - half_w, pos[1] - half_h, w, h)
+                )
 
         # Owners and colonies
         self.owners: List[Owner] = list(self.config.initial_owners)
         self.colonies: List[Colony] = []
-        type_names = self.config.ant_types or [self.settings.DEFAULT_ANT_TYPE_NAME] * len(self.nest_positions)
+        type_names = self.config.ant_types or [
+            self.settings.DEFAULT_ANT_TYPE_NAME
+        ] * len(self.nest_positions)
 
         for idx, pos in enumerate(self.nest_positions):
-            name = type_names[idx] if idx < len(type_names) else self.settings.DEFAULT_ANT_TYPE_NAME
+            name = (
+                type_names[idx]
+                if idx < len(type_names)
+                else self.settings.DEFAULT_ANT_TYPE_NAME
+            )
             ant_type = ANT_TYPES_BY_NAME.get(name, farao)
             colony = Colony(pos, ant_type=ant_type)
             self.colonies.append(colony)
@@ -144,17 +137,32 @@ class LevelScene:
         # Keep lazy-creation: build an executor only if workers > 1
         self._thread_workers = workers
 
-        self.logger.info("Level '%s' initialized with %d nests", self.config.name, len(self.nest_positions))
+        self.logger.info(
+            "Level '%s' initialized with %d nests",
+            self.config.name,
+            len(self.nest_positions),
+        )
 
         # Estado do jogo
-        self.state: str = "tutorial" if getattr(self.config, "tutorial", None) else "playing"
+        self.state: str = (
+            "tutorial" if getattr(self.config, "tutorial", None) else "playing"
+        )
 
         self.tutorial_font = pygame.font.SysFont("arial", 24)
         self.completed: bool = False
 
+        # --- Configuração da IA Inimiga ---
+        profile = self.config.ai_profile or AI_BALANCED
+        self.enemy_ai = EnemyController(self, profile)
+
+        self.logger.info(f"Nível {config.name} iniciado. IA: {profile.name}")
 
     # -------------- Utility helpers --------------
-    def _calculate_rotation_angle(self, origin: Union[Sequence[float], pygame.Vector2], destination: Union[Sequence[float], pygame.Vector2]) -> float:
+    def _calculate_rotation_angle(
+        self,
+        origin: Union[Sequence[float], pygame.Vector2],
+        destination: Union[Sequence[float], pygame.Vector2],
+    ) -> float:
         dx = float(destination[0]) - float(origin[0])
         dy = float(destination[1]) - float(origin[1])
         if dx == 0.0 and dy == 0.0:
@@ -169,7 +177,9 @@ class LevelScene:
 
     # -------------- Systems --------------
     # TransferSystem
-    def _start_ant_movement(self, origin_index: int, dest_index: int, owner: Owner, offset_index: int = 0) -> None:
+    def _start_ant_movement(
+        self, origin_index: int, dest_index: int, owner: Owner, offset_index: int = 0
+    ) -> None:
         # Validate indices
         if origin_index < 0 or origin_index >= len(self.nest_positions):
             return
@@ -206,8 +216,13 @@ class LevelScene:
         candidate_pos = origin - dir_norm * spacing * candidate_offset
         candidate_rect = self._ant_rect_from_pos(candidate_pos)
 
-        existing_rects = [self._ant_rect_from_pos(a["position"]) for a in self.moving_ants]
-        while any(candidate_rect.colliderect(r) for r in existing_rects) and attempt < max_attempts:
+        existing_rects = [
+            self._ant_rect_from_pos(a["position"]) for a in self.moving_ants
+        ]
+        while (
+            any(candidate_rect.colliderect(r) for r in existing_rects)
+            and attempt < max_attempts
+        ):
             attempt += 1
             candidate_offset += 1
             candidate_pos = origin - dir_norm * spacing * candidate_offset
@@ -248,13 +263,19 @@ class LevelScene:
             origin_pos: pygame.Vector2 = pygame.Vector2(self.nest_positions[origin_idx])
             dest_pos: pygame.Vector2 = pygame.Vector2(self.nest_positions[dest_idx])
             direction: pygame.Vector2 = dest_pos - origin_pos
-            dir_norm: pygame.Vector2 = direction.normalize() if direction.length() != 0 else pygame.Vector2(1, 0)
+            dir_norm: pygame.Vector2 = (
+                direction.normalize()
+                if direction.length() != 0
+                else pygame.Vector2(1, 0)
+            )
 
             spawn_offset: int = spacing * 2
             candidate_pos: pygame.Vector2 = origin_pos + dir_norm * spawn_offset
             candidate_rect: pygame.Rect = self._ant_rect_from_pos(candidate_pos)
 
-            existing_rects: List[pygame.Rect] = [self._ant_rect_from_pos(a["position"]) for a in self.moving_ants]
+            existing_rects: List[pygame.Rect] = [
+                self._ant_rect_from_pos(a["position"]) for a in self.moving_ants
+            ]
 
             if not any(candidate_rect.colliderect(r) for r in existing_rects):
                 self._start_ant_movement(origin_idx, dest_idx, owner, 0)
@@ -301,7 +322,9 @@ class LevelScene:
                 # if defenders depleted, mark nest as empty
                 if len(dest_colony.ants) == 0:
                     self.owners[dest_index] = "empty"
-                self.logger.debug("Combat at nest %d: removed one enemy ant", dest_index)
+                self.logger.debug(
+                    "Combat at nest %d: removed one enemy ant", dest_index
+                )
                 # arriving ant is consumed in the fight
                 return
             else:
@@ -310,7 +333,11 @@ class LevelScene:
                 ant_obj = ant["ant_obj"]
                 if isinstance(ant_obj, Ant):
                     dest_colony.ants.append(ant_obj)
-                self.logger.info("Nest %d captured by %s after clearing defenders", dest_index, ant_owner)
+                self.logger.info(
+                    "Nest %d captured by %s after clearing defenders",
+                    dest_index,
+                    ant_owner,
+                )
                 return
 
     def _update_ant_movement(self) -> None:
@@ -355,7 +382,9 @@ class LevelScene:
             return self.colonies[i].update(dt)
 
         if self._thread_workers and self._thread_workers > 1:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=self._thread_workers) as pool:
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=self._thread_workers
+            ) as pool:
                 results = list(pool.map(_step, indices))
         else:
             results = [_step(i) for i in indices]
@@ -364,48 +393,9 @@ class LevelScene:
             # Re-render handled by main loop; logging here for visibility
             produced_total = sum(results)
             if produced_total:
-                self.logger.debug("Produced %d ants across colonies this tick", produced_total)
-
-        # Enemy AI behavior: special-case Quenquen colonies to auto-raid when large enough
-        # For each enemy colony with Quenquen type and at least 15 ants, send a raid
-        try:
-            for i, owner in enumerate(self.owners):
-                if owner != "enemy":
-                    continue
-                colony = self.colonies[i]
-                ant_type = getattr(colony.default_ant_type, "name", None)
-                if ant_type != "Quenquen":
-                    continue
-                count = len(colony.ants)
-                if count < 15:
-                    continue
-
-                # avoid scheduling multiple concurrent raids from same origin
-                if any(t["origin"] == i for t in self.pending_transfers):
-                    continue
-
-                # find nearest non-enemy target
-                best_j = None
-                best_dist = float("inf")
-                origin_pos = pygame.Vector2(self.nest_positions[i])
-                for j, pos in enumerate(self.nest_positions):
-                    if j == i:
-                        continue
-                    if self.owners[j] == "enemy":
-                        continue
-                    d = origin_pos.distance_to(pygame.Vector2(pos))
-                    if d < best_dist:
-                        best_dist = d
-                        best_j = j
-
-                if best_j is not None:
-                    # send a portion of forces
-                    send_count = max(5, count // 3)
-                    send_count = min(send_count, count)
-                    self.pending_transfers.append({"origin": i, "dest": best_j, "remaining": int(send_count)})
-                    self.logger.info("Enemy Quenquen at %d launches raid to %d with %d ants", i, best_j, int(send_count))
-        except Exception:
-            self.logger.exception("Error during enemy AI raid checks")
+                self.logger.debug(
+                    "Produced %d ants across colonies this tick", produced_total
+                )
 
     # -------------- Input handling --------------
     def handle_event(self, event: Any) -> None:
@@ -418,7 +408,6 @@ class LevelScene:
             self.running = False
         elif event.type == pygame.MOUSEBUTTONDOWN:
             self._handle_mouse_click(event)
-
 
     def _handle_mouse_click(self, event) -> None:
         mouse_pos: Tuple[int, int] = event.pos
@@ -461,11 +450,13 @@ class LevelScene:
                     else:
                         available = len(origin_colony.ants)
                         if available > 0:
-                            self.pending_transfers.append({
-                                "origin": origin_idx,
-                                "dest": index,
-                                "remaining": available,
-                            })
+                            self.pending_transfers.append(
+                                {
+                                    "origin": origin_idx,
+                                    "dest": index,
+                                    "remaining": available,
+                                }
+                            )
                 # Clear selection after issuing the command
                 self.selected_nest_indices.clear()
                 return
@@ -519,18 +510,24 @@ class LevelScene:
 
         # Moving ants
         for ant in self.moving_ants:
-            self.sprites.draw_ant(target, ant["position"], ant["angle"], self.frame_index)
+            ant_obj = ant["ant_obj"]
+            t_name = ant_obj.type.name if ant_obj else "Farao"
+            self.sprites.draw_ant(
+                target,
+                ant["position"],
+                ant["angle"],
+                self.frame_index,
+                ant_type_name=t_name,
+            )
 
         if self.state == "tutorial" and getattr(self.config, "tutorial", None):
             self._render_tutorial_overlay(target)
-
 
         pygame.display.flip()
 
     def _render_tutorial_overlay(self, surface: pygame.Surface) -> None:
         overlay = pygame.Surface(
-            (self.settings.WIDTH, self.settings.HEIGHT),
-            pygame.SRCALPHA
+            (self.settings.WIDTH, self.settings.HEIGHT), pygame.SRCALPHA
         )
         overlay.fill((0, 0, 0, 200))
         surface.blit(overlay, (0, 0))
@@ -541,9 +538,7 @@ class LevelScene:
 
         title_font = pygame.font.SysFont("arial", 40, bold=True)
         title_surf = title_font.render(tutorial.title, True, (255, 255, 0))
-        title_rect = title_surf.get_rect(
-            center=(self.settings.WIDTH // 2, 80)
-        )
+        title_rect = title_surf.get_rect(center=(self.settings.WIDTH // 2, 80))
         surface.blit(title_surf, title_rect)
 
         start_x = 100
@@ -551,17 +546,12 @@ class LevelScene:
 
         for line in tutorial.lines:
             h = render_rich_text_line(
-                surface,
-                line,
-                (start_x, start_y),
-                self.tutorial_font
+                surface, line, (start_x, start_y), self.tutorial_font
             )
             start_y += h + 15
 
         cont_surf = self.tutorial_font.render(
-            "Clique para iniciar...",
-            True,
-            (150, 150, 150)
+            "Clique para iniciar...", True, (150, 150, 150)
         )
         cont_rect = cont_surf.get_rect(
             center=(self.settings.WIDTH // 2, self.settings.HEIGHT - 50)
@@ -569,7 +559,7 @@ class LevelScene:
         surface.blit(cont_surf, cont_rect)
 
     # -------------- Update --------------
-# ... (Mantenha o resto da classe como estava até chegar no método update)
+    # ... (Mantenha o resto da classe como estava até chegar no método update)
 
     # -------------- Update --------------
     def update(self, dt: float) -> None:
@@ -587,14 +577,17 @@ class LevelScene:
         # 2. Atualiza produção nas colônias (nascimento de novas formigas)
         self._update_production(dt)
 
-        # 3. Atualiza animação dos sprites (troca de frames)
-        if self.moving_ants:
-             self._update_sprite_animation()
+        # 3. Atualiza a IA inimiga
+        self.enemy_ai.update(dt)
 
-        # 4. Atualiza física/movimento das formigas (deslocamento e colisão)
+        # 4. Atualiza animação dos sprites (troca de frames)
+        if self.moving_ants:
+            self._update_sprite_animation()
+
+        # 5. Atualiza física/movimento das formigas (deslocamento e colisão)
         self._update_ant_movement()
 
-        # 5. Verifica condição de vitória
+        # 6. Verifica condição de vitória
         vc = self.config.victory_condition or default_victory_condition
         if vc(self.owners, self.colonies):
             self.completed = True
