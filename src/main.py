@@ -1,159 +1,186 @@
 """
-Ponto de entrada (Entrypoint) da aplicação Ant Simulator.
-Responsável pelo bootstrap, injeção de dependências e inicialização do Engine.
-
-Uso:
-    python src/main.py [--headless]
+Ponto de entrada da aplicação Ant Simulator.
 """
 
 import sys
 import logging
 import os
+from typing import Tuple, List, Callable, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config.settings import Settings
 from core.app_config import AppConfig
-from core.engine import Engine
+from core.engine import Engine, IScene
+from core.interfaces import IClock, IInputHandler, IRenderer
+from core.events import Event, GameStartEvent, LevelCompleteEvent, CampaignStartEvent
+
 from core.levels_intro import (
     create_intro_config,
     create_intro2_config,
     create_intro3_config,
 )
-from core.levels_campaign import (
-    create_level_1_config,
-)
+from core.levels_campaign import create_level_1_config
 from core.level_scene import LevelScene
-from core.events import GameStartEvent, LevelCompleteEvent, CampaignStartEvent
+from core.level_config import LevelConfig
 from core.scenes.title_scene import TitleScene
 from utils.logging_config import configure_logging
-from core.interfaces import IClock, IInputHandler, IRenderer
-
-# Adapters
-try:
-    from adapters.pygame_adapter import PygameClock, PygameInput, PygameRenderer
-
-    PYGAME_INSTALLED = True
-except ImportError:
-    PYGAME_INSTALLED = False
 
 from adapters.headless_adapter import HeadlessClock, HeadlessInput, HeadlessRenderer
 
+# Tenta importar Pygame apenas se necessário/disponível
+try:
+    from adapters.pygame_adapter import PygameClock, PygameInput, PygameRenderer
 
-def main() -> None:
-    # 1. Configuração de ambiente
-    config = AppConfig.from_env()
+    PYGAME_AVAILABLE = True
+except ImportError:
+    PYGAME_AVAILABLE = False
 
-    # 2. Logging
-    log_level_map = {
-        "DEBUG": logging.DEBUG,
-        "INFO": logging.INFO,
-        "WARNING": logging.WARNING,
-        "ERROR": logging.ERROR,
-    }
-    configure_logging(level=log_level_map.get(config.log_level, logging.INFO))
-    logger = logging.getLogger("main")
 
-    # 3. Adapters
-    clock: IClock
-    input_handler: IInputHandler
-    renderer: IRenderer
+def create_adapters(config: AppConfig) -> Tuple[IClock, IInputHandler, IRenderer]:
+    """Factory para criação dos adapters baseada na configuração."""
+    logger = logging.getLogger("main.factory")
+
     if config.mode == "interactive":
-        if not PYGAME_INSTALLED:
+        if not PYGAME_AVAILABLE:
             logger.critical(
-                "Modo interativo solicitado, mas pygame não está instalado."
+                "Modo interativo solicitado, mas 'pygame' não está instalado."
             )
             sys.exit(1)
 
-        logger.info("Inicializando Pygame...")
-        clock = PygameClock()
-        input_handler = PygameInput()
-        renderer = PygameRenderer(config.width, config.height, Settings.WINDOW_TITLE)
-        screen_surface = renderer.screen
-    else:
-        logger.info("Inicializando modo headless...")
-        clock = HeadlessClock(fixed_dt=0.016)
-        input_handler = HeadlessInput()
-        renderer = HeadlessRenderer()
-
-        import pygame
-
-        screen_surface = pygame.Surface((config.width, config.height))
-
-    # 4. Engine
-    try:
-        engine = Engine(
-            config=config,
-            clock=clock,
-            input_handler=input_handler,
-            renderer=renderer,
+        logger.info("Inicializando Pygame Adapters...")
+        return (
+            PygameClock(),
+            PygameInput(),
+            PygameRenderer(config.width, config.height, Settings.WINDOW_TITLE),
         )
+    else:
+        logger.info("Inicializando Headless Adapters...")
+        return (HeadlessClock(fixed_dt=0.016), HeadlessInput(), HeadlessRenderer())
 
-        game_settings = Settings()
 
-        # Definição do tutorial
-        tutorial_creators = [
+def get_initial_scene(config: AppConfig, renderer: IRenderer) -> IScene:
+    """Define qual cena inicia o jogo baseada no modo."""
+    if config.mode == "interactive":
+        # Renderer do Pygame tem o atributo 'screen', mas IRenderer não garante isso.
+        # Em um código 100% puro, passaríamos o Renderer inteiro para a Scene,
+        # mas para compatibilidade com o TitleScene atual:
+        screen = getattr(renderer, "screen", None)
+        return TitleScene(screen)
+    else:
+        # Headless começa direto na campanha
+        settings = Settings()
+        cfg = create_level_1_config(settings)
+        return LevelScene(settings, cfg)
+
+
+class CampaignManager:
+    """Gerencia o estado da campanha e a transição de fases."""
+
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+        self.tutorial_creators: List[Callable[[Settings], LevelConfig]] = [
             create_intro_config,
             create_intro2_config,
             create_intro3_config,
         ]
-
-        # Definição da campanha completa
-        level_creators = [
+        self.campaign_creators: List[Callable[[Settings], LevelConfig]] = [
             create_level_1_config,
         ]
+        self.active_creators: List[Callable[[Settings], LevelConfig]] = []
+        self.current_index = 0
 
-        current_level_index = 0
+    def start_tutorial(self) -> IScene:
+        self.active_creators = self.tutorial_creators
+        self.current_index = 0
+        return self._create_current_level()
 
-        # Cena inicial: Title
-        title_scene = TitleScene(screen_surface)
-        engine.set_scene(title_scene)
+    def start_campaign(self) -> IScene:
+        self.active_creators = self.campaign_creators
+        self.current_index = 0
+        return self._create_current_level()
 
-        logger.info("Sistema pronto. Iniciando loop principal.")
+    def next_level(self) -> Optional[IScene]:
+        self.current_index += 1
+        if self.current_index < len(self.active_creators):
+            return self._create_current_level()
+        return None
 
-        # 5. Loop de orquestração de cenas
+    def _create_current_level(self) -> LevelScene:
+        cfg = self.active_creators[self.current_index](self.settings)
+        return LevelScene(self.settings, cfg)
+
+
+def main() -> None:
+    # 1. Config e Logging
+    config = AppConfig.from_env()
+    configure_logging(level=logging.INFO)  # Poderia vir do config.log_level
+    logger = logging.getLogger("main")
+
+    # 2. Adapters
+    clock, input_handler, renderer = create_adapters(config)
+
+    # 3. Engine
+    engine = Engine(config, clock, input_handler, renderer)
+
+    # 4. Estado Global
+    game_settings = Settings()
+    campaign = CampaignManager(game_settings)
+
+    # Cena Inicial
+    current_scene = get_initial_scene(config, renderer)
+    engine.set_scene(current_scene)
+
+    logger.info("Sistema pronto. Iniciando Game Loop.")
+
+    try:
         while True:
             engine.run()
 
+            # O Engine parou. Verificamos o motivo através do estado da cena.
             last_scene = engine.current_scene
-            next_event = getattr(last_scene, "next_action", None)
-
-            if last_scene is not None:
-                result_event = getattr(last_scene, "result_event", None)
-                if result_event:
-                    next_event = result_event
-
-            # Transições
-            if isinstance(next_event, GameStartEvent):
-                active_creators = tutorial_creators
-                current_level_index = 0
-                cfg = active_creators[current_level_index](game_settings)
-                engine.set_scene(LevelScene(screen_surface, game_settings, cfg))
-
-            elif isinstance(next_event, CampaignStartEvent):
-                active_creators = level_creators
-                current_level_index = 0
-                cfg = active_creators[current_level_index](game_settings)
-                engine.set_scene(LevelScene(screen_surface, game_settings, cfg))
-
-            elif isinstance(next_event, LevelCompleteEvent):
-                current_level_index += 1
-
-                if current_level_index < len(active_creators):
-                    cfg = active_creators[current_level_index](game_settings)
-                    engine.set_scene(LevelScene(screen_surface, game_settings, cfg))
-                else:
-                    engine.set_scene(TitleScene(screen_surface))
-
-            else:
-                # Cena terminou sem evento explícito (quit real)
+            if last_scene is None:
                 break
 
-    except Exception:
-        logger.exception("Aplicação encerrada inesperadamente.")
-        sys.exit(1)
+            # Recupera resultado usando o novo Protocolo IScene (que tem result_event)
+            # ou fallback para verificação manual se a cena não implementou property
+            result: Optional[Event] = getattr(last_scene, "result_event", None)
 
-    sys.exit(0)
+            # Fallback para TitleScene que usa next_action
+            if not result and hasattr(last_scene, "next_action"):
+                result = getattr(last_scene, "next_action")
+
+            if isinstance(result, GameStartEvent):
+                engine.set_scene(campaign.start_tutorial())
+
+            elif isinstance(result, CampaignStartEvent):
+                engine.set_scene(campaign.start_campaign())
+
+            elif isinstance(result, LevelCompleteEvent):
+                next_scene = campaign.next_level()
+                if next_scene:
+                    engine.set_scene(next_scene)
+                else:
+                    # Fim da playlist de níveis
+                    if config.mode == "interactive":
+                        # Volta para o título
+                        screen = getattr(renderer, "screen", None)
+                        engine.set_scene(TitleScene(screen))
+                    else:
+                        logger.info("Campanha headless finalizada.")
+                        break
+            else:
+                # QuitEvent ou fim sem transição explícita
+                break
+
+    except KeyboardInterrupt:
+        logger.info("Interrompido pelo usuário.")
+    except Exception:
+        logger.exception("Erro fatal não tratado.")
+        sys.exit(1)
+    finally:
+        engine.shutdown()
+        sys.exit(0)
 
 
 if __name__ == "__main__":

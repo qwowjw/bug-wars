@@ -1,7 +1,7 @@
 import pygame
 from typing import Any
 from core.engine import IScene
-from core.events import Event, GameStartEvent
+from core.events import Event, GameStartEvent, MouseButtonDown
 from config.settings import Settings
 
 
@@ -26,7 +26,7 @@ class TitleScene(IScene):
         self.btn_play.center = (Settings.WIDTH // 2, Settings.HEIGHT // 2 + 110)
 
     def handle_event(self, event: Any) -> None:
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+        if isinstance(event, MouseButtonDown) and event.button == 1:
             if self.btn_tutorial.collidepoint(event.pos):
                 self._next_event = GameStartEvent()
                 self.running = False

@@ -5,10 +5,9 @@ Define perfis de comportamento e a lógica de tomada de decisão para ataques e 
 
 import random
 import logging
+import math
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, TYPE_CHECKING, Literal
-
-import pygame
 
 from entities.ant import AntType
 from entities.ant_types import ALL_ANT_TYPES
@@ -146,7 +145,7 @@ class EnemyController:
     def _select_best_target(self, origin_index: int) -> Optional[int]:
         """Seleciona o melhor alvo baseado no perfil da IA."""
         possible_targets: List[Tuple[int, float]] = []
-        origin_pos = pygame.Vector2(self.scene.nest_positions[origin_index])
+        origin_pos = self.scene.nest_positions[origin_index]
 
         for i, pos_tuple in enumerate(self.scene.nest_positions):
             if i == origin_index:
@@ -156,8 +155,10 @@ class EnemyController:
             if self.scene.owners[i] == "enemy":
                 continue
 
-            target_pos = pygame.Vector2(pos_tuple)
-            dist = origin_pos.distance_to(target_pos)
+            ox, oy = float(origin_pos[0]), float(origin_pos[1])
+            tx, ty = float(pos_tuple[0]), float(pos_tuple[1])
+            dx, dy = tx - ox, ty - oy
+            dist = math.hypot(dx, dy)
 
             # Filtra por raio de agressividade
             if self.profile.aggro_radius and dist > self.profile.aggro_radius:

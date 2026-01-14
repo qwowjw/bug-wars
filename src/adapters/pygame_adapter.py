@@ -1,6 +1,8 @@
 import pygame
-from typing import Any, List
+from typing import List
 from core.interfaces import IClock, IInputHandler, IRenderer
+from core.events import QuitEvent, MouseButtonDown, KeyDown, Event
+from core.engine import IScene
 
 
 class PygameClock(IClock):
@@ -16,8 +18,25 @@ class PygameClock(IClock):
 
 
 class PygameInput(IInputHandler):
-    def poll(self) -> List[pygame.event.Event]:
-        return pygame.event.get()
+    def poll(self) -> List[Event]:
+        out: List[Event] = []
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT:
+                out.append(QuitEvent())
+            elif ev.type == pygame.MOUSEBUTTONDOWN:
+                mods = pygame.key.get_mods()
+                shift = bool(mods & pygame.KMOD_SHIFT)
+                ctrl = bool(mods & (pygame.KMOD_CTRL | pygame.KMOD_META))
+                pos = (int(ev.pos[0]), int(ev.pos[1])) if hasattr(ev, "pos") else (0, 0)
+                btn = int(getattr(ev, "button", 0))
+                out.append(MouseButtonDown(pos=pos, button=btn, shift=shift, ctrl=ctrl))
+            elif ev.type == pygame.KEYDOWN:
+                mods = int(getattr(ev, "mod", pygame.key.get_mods()))
+                shift = bool(mods & pygame.KMOD_SHIFT)
+                ctrl = bool(mods & (pygame.KMOD_CTRL | pygame.KMOD_META))
+                key = int(getattr(ev, "key", 0))
+                out.append(KeyDown(key=key, shift=shift, ctrl=ctrl))
+        return out
 
 
 class PygameRenderer(IRenderer):
@@ -26,10 +45,7 @@ class PygameRenderer(IRenderer):
         self.screen = pygame.display.set_mode((width, height))
         pygame.display.set_caption(title)
 
-    def render(self, scene: Any) -> None:
-        # Assume que a scene sabe se desenhar na surface fornecida
-        # Idealmente, o renderer desenharia a cena, mas mantendo compatibilidade
-        # com seu LevelScene existente:
+    def render(self, scene: IScene) -> None:
         if hasattr(scene, "render"):
             scene.render(self.screen)
         pygame.display.flip()

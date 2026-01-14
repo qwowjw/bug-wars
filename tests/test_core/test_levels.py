@@ -1,5 +1,9 @@
 from config.settings import Settings
-from core.levels import create_intro_config, create_intro2_config, create_intro3_config
+from core.levels_intro import (
+    create_intro_config,
+    create_intro2_config,
+    create_intro3_config,
+)
 from core.level_scene import default_victory_condition
 
 

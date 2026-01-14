@@ -32,3 +32,18 @@ class CampaignStartEvent(Event):
     """Evento disparado para iniciar a campanha completa."""
 
     pass
+
+
+@dataclass(frozen=True)
+class MouseButtonDown(Event):
+    pos: tuple[int, int]
+    button: int
+    shift: bool = False
+    ctrl: bool = False
+
+
+@dataclass(frozen=True)
+class KeyDown(Event):
+    key: int
+    shift: bool = False
+    ctrl: bool = False

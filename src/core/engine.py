@@ -8,6 +8,7 @@ from typing import Any, Optional, Protocol, runtime_checkable
 
 from core.interfaces import IClock, IInputHandler, IRenderer
 from core.app_config import AppConfig
+from core.events import QuitEvent, Event
 
 
 @runtime_checkable
@@ -19,6 +20,9 @@ class IScene(Protocol):
     def update(self, dt: float) -> None: ...
     def handle_event(self, event: Any) -> None: ...
     def render(self, surface: Any) -> None: ...
+
+    @property
+    def result_event(self) -> Optional["Event"]: ...
 
 
 class Engine:
@@ -65,15 +69,10 @@ class Engine:
                 # 2. Input
                 events = self.input_handler.poll()
                 for event in events:
-                    # Permite que o Engine intercepte Quit global, se necessário
-                    if hasattr(event, "type"):
-                        # Pequeno acoplamento com estrutura de evento pygame
-                        # para manter compatibilidade com sistemas existentes,
-                        # mas poderia ser abstraído.
-                        import pygame
-
-                        if event.type == pygame.QUIT:
-                            self._running = False
+                    # Intercepta um encerramento global desacoplado de pygame
+                    if isinstance(event, QuitEvent):
+                        self._running = False
+                        continue
 
                     self.current_scene.handle_event(event)
 

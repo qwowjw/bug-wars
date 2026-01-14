@@ -15,10 +15,9 @@ from typing import (
 )
 import math
 import random
-import concurrent.futures
 from core.level_config import LevelConfig
 from rendering.ui_helper import render_rich_text_line
-from core.events import Event, LevelCompleteEvent
+from core.events import Event, LevelCompleteEvent, MouseButtonDown, KeyDown
 from ai.enemy_controller import (
     EnemyController,
     AI_BALANCED,
@@ -70,13 +69,9 @@ class LevelScene:
     Keep the main loop simple and low-allocation; avoid creating objects in hot paths.
     """
 
-    def __init__(
-        self, screen: pygame.Surface, settings: Settings, config: LevelConfig
-    ) -> None:
+    def __init__(self, settings: Settings, config: LevelConfig) -> None:
         self.logger = logging.getLogger(__name__)
-        self.clock: pygame.time.Clock = pygame.time.Clock()
         self.settings: Settings = settings
-        self.screen: pygame.Surface = screen
         self.running: bool = True
         self.sprites: SpriteRenderer = SpriteRenderer(settings)
         self.font: pygame.font.Font = pygame.font.SysFont(None, self.settings.FONT_SIZE)
@@ -134,7 +129,8 @@ class LevelScene:
         self.moving_ants: List[MovingAnt] = []
         self.pending_transfers: List[Dict[str, int]] = []  # {origin, dest, remaining}
         self.frame_index: int = 0
-        self.last_frame_toggle_ms: int = 0
+        # acumulador de tempo para alternância de sprite (em segundos)
+        self._anim_accum: float = 0.0
 
         # Thread pool for production system
         workers = max(1, int(getattr(self.settings, "THREAD_WORKERS", 0)) or 0)
@@ -288,13 +284,15 @@ class LevelScene:
                     self.pending_transfers.remove(transfer)
 
     # MovementSystem
-    def _update_sprite_animation(self) -> None:
-        now = pygame.time.get_ticks()
+    def _update_sprite_animation(self, dt: float) -> None:
         if not self.moving_ants:
             return
-        if now - self.last_frame_toggle_ms >= self.settings.ANIM_INTERVAL_MS:
+        interval_s = float(self.settings.ANIM_INTERVAL_MS) / 1000.0
+        self._anim_accum += dt
+        if self._anim_accum >= interval_s:
+            # alterna um frame de cada vez mesmo que dt>interval (comportamento antigo)
             self.frame_index = 1 - self.frame_index
-            self.last_frame_toggle_ms = now
+            self._anim_accum -= interval_s
 
     def _resolve_arrival(self, ant: MovingAnt) -> None:
         dest_index = int(ant["dest_index"])
@@ -374,50 +372,35 @@ class LevelScene:
     # ProductionSystem (parallelizable)
     def _update_production(self, dt: float) -> None:
         # Decide which colonies produce: allies always; enemy only if configured
-        indices: List[int] = []
+        # Otimização: evitar criação de listas, closures e threads para operação CPU-bound leve
+        enemy_produces = self.config.enemy_produces
+
+        total_produced = 0
+
         for i, owner in enumerate(self.owners):
-            if owner == "ally" or (owner == "enemy" and self.config.enemy_produces):
-                indices.append(i)
+            if owner == "ally" or (owner == "enemy" and enemy_produces):
+                total_produced += self.colonies[i].update(dt)
 
-        if not indices:
-            return
-
-        def _step(i: int) -> int:
-            return self.colonies[i].update(dt)
-
-        if self._thread_workers and self._thread_workers > 1:
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=self._thread_workers
-            ) as pool:
-                results = list(pool.map(_step, indices))
-        else:
-            results = [_step(i) for i in indices]
-
-        if any(p > 0 for p in results):
-            # Re-render handled by main loop; logging here for visibility
-            produced_total = sum(results)
-            if produced_total:
-                self.logger.debug(
-                    "Produced %d ants across colonies this tick", produced_total
-                )
+        if total_produced > 0:
+            self.logger.debug(
+                "Produced %d ants across colonies this tick", total_produced
+            )
 
     # -------------- Input handling --------------
     def handle_event(self, event: Any) -> None:
+        # Usa eventos genéricos do core
         if self.state == "tutorial":
-            if event.type in (pygame.MOUSEBUTTONDOWN, pygame.KEYDOWN):
+            if isinstance(event, (MouseButtonDown, KeyDown)):
                 self.state = "playing"
             return
 
-        if event.type == pygame.QUIT:
-            self.running = False
-        elif event.type == pygame.MOUSEBUTTONDOWN:
+        if isinstance(event, MouseButtonDown):
             self._handle_mouse_click(event)
 
-    def _handle_mouse_click(self, event: pygame.event.Event) -> None:
+    def _handle_mouse_click(self, event: MouseButtonDown) -> None:
         mouse_pos: Tuple[int, int] = event.pos
-        mods = pygame.key.get_mods()
-        shift_pressed = bool(mods & pygame.KMOD_SHIFT)
-        ctrl_pressed = bool(mods & (pygame.KMOD_CTRL | pygame.KMOD_META))
+        shift_pressed = bool(event.shift)
+        ctrl_pressed = bool(event.ctrl)
 
         for index, rect in enumerate(self.nest_rects):
             if not rect.collidepoint(mouse_pos):
@@ -469,13 +452,18 @@ class LevelScene:
             return
 
     # -------------- Render --------------
-    def _render_ant_count(self, index: int, rect: pygame.Rect) -> None:
+    def _render_ant_count(
+        self, surface: pygame.Surface, index: int, rect: pygame.Rect
+    ) -> None:
         count = len(self.colonies[index].ants)
         img = self.font.render(str(count), True, self.settings.TEXT_COLOR)
-        self.screen.blit(img, (rect.centerx - 5, rect.bottom + 5))
+        surface.blit(img, (rect.centerx - 5, rect.bottom + 5))
 
-    def render(self, surface: Optional[pygame.Surface] = None) -> None:
-        target = surface or self.screen
+    def render(self, surface: Any) -> None:
+        if surface is None:
+            # Sem destino, não há onde desenhar (renderer deve fornecer)
+            return
+        target = surface
         target.fill(self.settings.BG_COLOR)
 
         # Nests
@@ -491,26 +479,14 @@ class LevelScene:
 
             # selection ring (support multi-select)
             if i in self.selected_nest_indices:
-                pygame.draw.circle(
-                    target,
-                    self.settings.SELECTION_COLOR,
-                    pos,
-                    self.settings.NEST_SIZE[0] // 2 + 5,
-                    3,
-                )
+                self.sprites.draw_selection_ring(target, pos)
 
             # optional enemy ring overlay (red) if no enemy sprite available
             if owner == "enemy" and not getattr(self.sprites, "nest_img_enemy", None):
-                pygame.draw.circle(
-                    target,
-                    (200, 60, 60),
-                    pos,
-                    self.settings.NEST_SIZE[0] // 2 + 2,
-                    2,
-                )
+                self.sprites.draw_enemy_ring(target, pos)
 
             rect = self.nest_rects[i]
-            self._render_ant_count(i, rect)
+            self._render_ant_count(target, i, rect)
 
         # Moving ants
         for ant in self.moving_ants:
@@ -527,7 +503,7 @@ class LevelScene:
         if self.state == "tutorial" and getattr(self.config, "tutorial", None):
             self._render_tutorial_overlay(target)
 
-        pygame.display.flip()
+        # flip é responsabilidade do Renderer (adapter)
 
     def _render_tutorial_overlay(self, surface: pygame.Surface) -> None:
         overlay = pygame.Surface(
@@ -586,7 +562,7 @@ class LevelScene:
 
         # 4. Atualiza animação dos sprites (troca de frames)
         if self.moving_ants:
-            self._update_sprite_animation()
+            self._update_sprite_animation(dt)
 
         # 5. Atualiza física/movimento das formigas (deslocamento e colisão)
         self._update_ant_movement()

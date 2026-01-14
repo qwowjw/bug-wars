@@ -111,19 +111,6 @@ fogo = AntType(
     crit_multiplier=1.4,
 )
 
-
-# Export list
-ALL_ANT_TYPES = [
-    pote_de_mel,
-    cortadeira_soldado,
-    cortadeira_operaria,
-    farao,
-    correicao,
-    argentina,
-    fogo,
-]
-
-# Quenquen: enemy invader type
 Quenquen = AntType(
     name="Quenquen",
     armor=0.6,
@@ -138,7 +125,17 @@ Quenquen = AntType(
     crit_multiplier=1.2,
 )
 
-ALL_ANT_TYPES.append(Quenquen)
+# Export list
+ALL_ANT_TYPES = [
+    # pote_de_mel,
+    # cortadeira_soldado,
+    # cortadeira_operaria,
+    farao,
+    # correicao,
+    # argentina,
+    fogo,
+    Quenquen,
+]
 
 
 # Map names to instances for lookup by Settings

@@ -1,5 +1,7 @@
-from typing import Any, List
+from typing import List
 from core.interfaces import IClock, IInputHandler, IRenderer
+from core.engine import IScene
+from core.events import Event
 
 
 class HeadlessClock(IClock):
@@ -17,7 +19,7 @@ class HeadlessClock(IClock):
 
 
 class HeadlessInput(IInputHandler):
-    def poll(self) -> List[Any]:
+    def poll(self) -> List[Event]:
         return []  # Sem input do usuário no modo headless
 
 
@@ -25,8 +27,7 @@ class HeadlessRenderer(IRenderer):
     def __init__(self) -> None:
         pass
 
-    def render(self, scene: Any) -> None:
-        # No-op: não desenha nada
+    def render(self, scene: IScene) -> None:
         pass
 
     def quit(self) -> None:

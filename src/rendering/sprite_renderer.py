@@ -119,3 +119,23 @@ class SpriteRenderer:
                 (int(center[0]), int(center[1])),
                 self.settings.NEST_SIZE[0] // 2,
             )
+
+    def draw_selection_ring(
+        self, surface: pygame.Surface, center: Tuple[int, int]
+    ) -> None:
+        pygame.draw.circle(
+            surface,
+            self.settings.SELECTION_COLOR,
+            (int(center[0]), int(center[1])),
+            self.settings.NEST_SIZE[0] // 2 + 5,
+            3,
+        )
+
+    def draw_enemy_ring(self, surface: pygame.Surface, center: Tuple[int, int]) -> None:
+        pygame.draw.circle(
+            surface,
+            (200, 60, 60),
+            (int(center[0]), int(center[1])),
+            self.settings.NEST_SIZE[0] // 2 + 2,
+            2,
+        )

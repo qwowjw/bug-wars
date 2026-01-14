@@ -1,22 +1,15 @@
 import pygame
-import sys
-from pathlib import Path
-
-# Add parent directories to path to resolve imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "ant_simulator"))
-
 from config.settings import Settings
-from core.levels import create_intro_config
+from core.levels_intro import create_intro_config
 from core.level_scene import LevelScene
 
 
 def test_owner_persists_when_colony_emptied(tmp_path):
     pygame.init()
     settings = Settings()
-    screen = pygame.Surface((settings.WIDTH, settings.HEIGHT))
     cfg = create_intro_config(settings)
 
-    scene = LevelScene(screen, settings, cfg)
+    scene = LevelScene(settings, cfg)
 
     # ensure initial owner of nest 0 is ally
     assert scene.owners[0] == "ally"
