@@ -1,8 +1,8 @@
 import pygame
 from typing import Any
-from core.engine import IScene
-from core.events import Event, GameStartEvent, MouseButtonDown
-from config.settings import Settings
+from src.core.engine import IScene
+from src.core.events import Event, GameStartEvent, MouseButtonDown
+from src.config.settings import Settings
 
 
 class TitleScene(IScene):
@@ -32,7 +32,7 @@ class TitleScene(IScene):
                 self.running = False
 
             elif self.btn_play.collidepoint(event.pos):
-                from core.events import CampaignStartEvent
+                from src.core.events import CampaignStartEvent
 
                 self._next_event = CampaignStartEvent()
                 self.running = False

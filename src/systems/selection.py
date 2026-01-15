@@ -1,6 +1,6 @@
 import pygame
 from typing import List
-from entities.nest import Nest
+from src.entities.nest import Nest
 
 
 class SelectionSystem:

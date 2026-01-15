@@ -1,9 +1,9 @@
 import pygame
 from typing import List, Tuple
 from pathlib import Path
-from utils.asset_loader import load_image
-from config.settings import Settings
-from core.level_config import InstructionElement
+from src.utils.asset_loader import load_image
+from src.config.settings import Settings
+from src.core.level_config import InstructionElement
 
 
 def render_rich_text_line(

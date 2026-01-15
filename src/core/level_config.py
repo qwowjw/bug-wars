@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Tuple, Optional, Callable, Union, Literal, TYPE_CHECKING
 from pathlib import Path
-from ai.enemy_controller import AIProfile
+from src.ai.enemy_controller import AIProfile
 
 # Tipo para definir segmentos de texto: ("Texto", (R, G, B)) ou apenas "Texto" (branco padrão)
 TextSegment = Union[str, Tuple[str, Tuple[int, int, int]]]
@@ -12,7 +12,7 @@ InstructionElement = Union[TextSegment, Path]
 Owner = Literal["ally", "enemy", "empty"]
 
 if TYPE_CHECKING:
-    from entities.colony import Colony
+    from src.entities.colony import Colony
 
 
 @dataclass(frozen=True)

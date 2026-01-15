@@ -1,9 +1,9 @@
 import logging
 from typing import Optional, Tuple, Dict
 import pygame
-from config.settings import Settings
-from utils.asset_loader import load_image
-from entities.ant_types import ALL_ANT_TYPES
+from src.config.settings import Settings
+from src.utils.asset_loader import load_image
+from src.entities.ant_types import ALL_ANT_TYPES
 
 
 class SpriteRenderer:

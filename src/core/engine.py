@@ -6,9 +6,16 @@ Responsável pelo Loop de Jogo (Game Loop) agnóstico de plataforma.
 import logging
 from typing import Any, Optional, Protocol, runtime_checkable
 
-from core.interfaces import IClock, IInputHandler, IRenderer
-from core.app_config import AppConfig
-from core.events import QuitEvent, Event
+from src.core.interfaces import IClock, IInputHandler, IRenderer
+from src.core.app_config import AppConfig
+from src.core.events import QuitEvent, Event
+from enum import Enum, auto
+
+
+class EngineExit(Enum):
+    QUIT = auto()
+    SCENE_FINISHED = auto()
+
 
 
 @runtime_checkable
@@ -49,12 +56,11 @@ class Engine:
     def set_scene(self, scene: IScene) -> None:
         self.current_scene = scene
 
-    def run(self) -> None:
+    def run(self) -> EngineExit:
         """Inicia o loop principal."""
         if not self.current_scene:
             self.logger.error("Nenhuma cena definida para o Engine.")
-            return
-
+            return EngineExit.QUIT
         self.logger.info("Iniciando Engine no modo: %s", self.config.mode)
         self._running = True
 
@@ -72,7 +78,7 @@ class Engine:
                     # Intercepta um encerramento global desacoplado de pygame
                     if isinstance(event, QuitEvent):
                         self._running = False
-                        continue
+                        return EngineExit.QUIT
 
                     self.current_scene.handle_event(event)
 
@@ -90,14 +96,18 @@ class Engine:
                             "Headless: Timeout atingido (%.1fs). Encerrando.", elapsed
                         )
                         self._running = False
+                        return EngineExit.QUIT
 
         except KeyboardInterrupt:
             self.logger.info("Interrupção pelo usuário (Ctrl+C).")
+            return EngineExit.QUIT
         except Exception:
             self.logger.exception("Falha crítica no Loop do Engine.")
             raise
         finally:
             self.logger.info("Cena finalizada ou Engine pausado.")
+
+        return EngineExit.SCENE_FINISHED
 
     def shutdown(self) -> None:
         """Encerra explicitamente os recursos do engine."""

@@ -2,35 +2,32 @@
 Ponto de entrada da aplicação Ant Simulator.
 """
 
-import sys
 import logging
-import os
+import sys
 from typing import Tuple, List, Callable, Optional
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from src.config.settings import Settings
+from src.core.app_config import AppConfig
+from src.core.engine import Engine, IScene
+from src.core.interfaces import IClock, IInputHandler, IRenderer
+from src.core.events import Event, GameStartEvent, LevelCompleteEvent, CampaignStartEvent
 
-from config.settings import Settings
-from core.app_config import AppConfig
-from core.engine import Engine, IScene
-from core.interfaces import IClock, IInputHandler, IRenderer
-from core.events import Event, GameStartEvent, LevelCompleteEvent, CampaignStartEvent
-
-from core.levels_intro import (
+from src.core.levels_intro import (
     create_intro_config,
     create_intro2_config,
     create_intro3_config,
 )
-from core.levels_campaign import create_level_1_config
-from core.level_scene import LevelScene
-from core.level_config import LevelConfig
-from core.scenes.title_scene import TitleScene
-from utils.logging_config import configure_logging
+from src.core.levels_campaign import create_level_1_config
+from src.core.level_scene import LevelScene
+from src.core.level_config import LevelConfig
+from src.core.scenes.title_scene import TitleScene
+from src.utils.logging_config import configure_logging
 
-from adapters.headless_adapter import HeadlessClock, HeadlessInput, HeadlessRenderer
+from src.adapters.headless_adapter import HeadlessClock, HeadlessInput, HeadlessRenderer
 
 # Tenta importar Pygame apenas se necessário/disponível
 try:
-    from adapters.pygame_adapter import PygameClock, PygameInput, PygameRenderer
+    from src.adapters.pygame_adapter import PygameClock, PygameInput, PygameRenderer
 
     PYGAME_AVAILABLE = True
 except ImportError:
@@ -43,10 +40,9 @@ def create_adapters(config: AppConfig) -> Tuple[IClock, IInputHandler, IRenderer
 
     if config.mode == "interactive":
         if not PYGAME_AVAILABLE:
-            logger.critical(
+            raise ImportError(
                 "Modo interativo solicitado, mas 'pygame' não está instalado."
             )
-            sys.exit(1)
 
         logger.info("Inicializando Pygame Adapters...")
         return (
@@ -111,7 +107,7 @@ class CampaignManager:
         return LevelScene(self.settings, cfg)
 
 
-def main() -> None:
+def main() -> int:
     # 1. Config e Logging
     config = AppConfig.from_env()
     configure_logging(level=logging.INFO)  # Poderia vir do config.log_level
@@ -177,11 +173,11 @@ def main() -> None:
         logger.info("Interrompido pelo usuário.")
     except Exception:
         logger.exception("Erro fatal não tratado.")
-        sys.exit(1)
+        return 1
     finally:
         engine.shutdown()
-        sys.exit(0)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

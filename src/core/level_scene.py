@@ -15,21 +15,21 @@ from typing import (
 )
 import math
 import random
-from core.level_config import LevelConfig
-from rendering.ui_helper import render_rich_text_line
-from core.events import Event, LevelCompleteEvent, MouseButtonDown, KeyDown
-from ai.enemy_controller import (
+from src.core.level_config import LevelConfig
+from src.rendering.ui_helper import render_rich_text_line
+from src.core.events import Event, LevelCompleteEvent, MouseButtonDown, KeyDown
+from src.ai.enemy_controller import (
     EnemyController,
     AI_BALANCED,
 )
 
 import pygame
 
-from config.settings import Settings
-from rendering.sprite_renderer import SpriteRenderer
-from entities.colony import Colony
-from entities.ant_types import ANT_TYPES_BY_NAME, farao
-from entities.ant import Ant
+from src.config.settings import Settings
+from src.rendering.sprite_renderer import SpriteRenderer
+from src.entities.colony import Colony
+from src.entities.ant_types import ANT_TYPES_BY_NAME, farao
+from src.entities.ant import Ant
 
 
 Vec2 = Tuple[int, int]

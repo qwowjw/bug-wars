@@ -1,5 +1,5 @@
 import pygame
-from config.settings import Settings
+from src.config.settings import Settings
 
 
 class UIRenderer:

@@ -1,5 +1,5 @@
-from config.settings import Settings
-from core.level_config import LevelConfig, TutorialConfig
+from src.config.settings import Settings
+from src.core.level_config import LevelConfig, TutorialConfig
 
 # Caminho para o ícone SHIFT (ajuste conforme seu path real)
 IMG_SHIFT = Settings.ASSETS_DIR / "sprites" / "buttons" / "shift.png"

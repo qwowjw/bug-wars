@@ -1,11 +1,6 @@
-import sys
-import os
 
-# garantir que o pacote `src` está no path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-from entities.ant_types import ALL_ANT_TYPES
-from entities.ant import Ant
+from src.entities.ant_types import ALL_ANT_TYPES
+from src.entities.ant import Ant
 
 
 def main() -> None:

@@ -1,5 +1,5 @@
-from entities.ant import Ant
-from utils.math_utils import clamp
+from src.entities.ant import Ant
+from src.utils.math_utils import clamp
 
 
 class MovementSystem:

@@ -1,10 +1,10 @@
-from config.settings import Settings
-from core.level_config import LevelConfig, TutorialConfig
-from core.nest_types import star_positions
+from src.config.settings import Settings
+from src.core.level_config import LevelConfig, TutorialConfig
+from src.core.nest_types import star_positions
 
 # Imports necessários para tipagem e configuração
-from entities.ant_types import Quenquen, farao
-from ai.enemy_controller import AI_BALANCED
+from src.entities.ant_types import Quenquen, farao
+from src.ai.enemy_controller import AI_BALANCED
 
 
 def create_level_1_config(settings: Settings) -> LevelConfig:

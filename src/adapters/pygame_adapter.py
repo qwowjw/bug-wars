@@ -1,8 +1,8 @@
 import pygame
 from typing import List
-from core.interfaces import IClock, IInputHandler, IRenderer
-from core.events import QuitEvent, MouseButtonDown, KeyDown, Event
-from core.engine import IScene
+from src.core.interfaces import IClock, IInputHandler, IRenderer
+from src.core.events import QuitEvent, MouseButtonDown, KeyDown, Event
+from src.core.engine import IScene
 
 
 class PygameClock(IClock):

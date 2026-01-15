@@ -1,7 +1,7 @@
 from typing import List
-from core.interfaces import IClock, IInputHandler, IRenderer
-from core.engine import IScene
-from core.events import Event
+from src.core.interfaces import IClock, IInputHandler, IRenderer
+from src.core.engine import IScene
+from src.core.events import Event
 
 
 class HeadlessClock(IClock):

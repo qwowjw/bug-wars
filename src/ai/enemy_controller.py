@@ -9,12 +9,12 @@ import math
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, TYPE_CHECKING, Literal
 
-from entities.ant import AntType
-from entities.ant_types import ALL_ANT_TYPES
+from src.entities.ant import AntType
+from src.entities.ant_types import ALL_ANT_TYPES
 
 if TYPE_CHECKING:
-    from core.level_scene import LevelScene
-    from entities.colony import Colony
+    from src.core.level_scene import LevelScene
+    from src.entities.colony import Colony
 
 
 TargetPriority = Literal["closest", "weakest", "random", "player_focus"]
