@@ -39,6 +39,10 @@ class LevelConfig:
     tutorial: Optional[TutorialConfig] = None
 
     ai_profile: Optional[AIProfile] = None
+    
+    # Objetivos para as estrelas
+    time_target: float = 120.0  # Tempo em segundos para ganhar estrela de tempo
+    score_target: int = 500  # Score mínimo para ganhar estrela de eficiência
 
     def validate(self) -> None:
         """Valida se as listas de configuração têm tamanhos consistentes."""

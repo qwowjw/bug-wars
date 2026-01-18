@@ -10,7 +10,8 @@ from src.config.settings import Settings
 from src.core.app_config import AppConfig
 from src.core.engine import Engine, IScene
 from src.core.interfaces import IClock, IInputHandler, IRenderer
-from src.core.events import Event, GameStartEvent, LevelCompleteEvent, CampaignStartEvent
+from src.core.events import Event, GameStartEvent, LevelFinishedEvent, CampaignStartEvent, NextLevelEvent, RetryLevelEvent
+from src.core.level_progression import LevelProgressionManager
 
 from src.core.levels_intro import (
     create_intro_config,
@@ -62,6 +63,8 @@ def get_initial_scene(config: AppConfig, renderer: IRenderer) -> IScene:
         # Em um código 100% puro, passaríamos o Renderer inteiro para a Scene,
         # mas para compatibilidade com o TitleScene atual:
         screen = getattr(renderer, "screen", None)
+        if screen is None:
+            raise RuntimeError("PygameRenderer deve ter um atributo 'screen'")
         return TitleScene(screen)
     else:
         # Headless começa direto na campanha
@@ -75,6 +78,7 @@ class CampaignManager:
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        self.progression = LevelProgressionManager()
         self.tutorial_creators: List[Callable[[Settings], LevelConfig]] = [
             create_intro_config,
             create_intro2_config,
@@ -85,6 +89,7 @@ class CampaignManager:
         ]
         self.active_creators: List[Callable[[Settings], LevelConfig]] = []
         self.current_index = 0
+        self.current_level_id: Optional[str] = None
 
     def start_tutorial(self) -> IScene:
         self.active_creators = self.tutorial_creators
@@ -96,6 +101,10 @@ class CampaignManager:
         self.current_index = 0
         return self._create_current_level()
 
+    def retry_level(self) -> IScene:
+        """Reinicia o nível atual."""
+        return self._create_current_level()
+
     def next_level(self) -> Optional[IScene]:
         self.current_index += 1
         if self.current_index < len(self.active_creators):
@@ -104,6 +113,7 @@ class CampaignManager:
 
     def _create_current_level(self) -> LevelScene:
         cfg = self.active_creators[self.current_index](self.settings)
+        self.current_level_id = cfg.name
         return LevelScene(self.settings, cfg)
 
 
@@ -152,7 +162,43 @@ def main() -> int:
             elif isinstance(result, CampaignStartEvent):
                 engine.set_scene(campaign.start_campaign())
 
-            elif isinstance(result, LevelCompleteEvent):
+            elif isinstance(result, LevelFinishedEvent):
+                # Salva o resultado da fase
+                if campaign.current_level_id:
+                    campaign.progression.update_level_result(
+                        campaign.current_level_id, result.result
+                    )
+                    logger.info(
+                        "Progresso salvo para '%s': %d estrelas",
+                        campaign.current_level_id,
+                        result.result.stars,
+                    )
+
+                if result.result.victory:
+                    # Vitória: tenta ir para a próxima fase
+                    next_scene = campaign.next_level()
+                    if next_scene:
+                        engine.set_scene(next_scene)
+                    else:
+                        # Fim da playlist de níveis
+                        if config.mode == "interactive":
+                            # Volta para o título
+                            screen = getattr(renderer, "screen", None)
+                            if screen is not None:
+                                engine.set_scene(TitleScene(screen))
+                            else:
+                                logger.error("Não foi possível criar TitleScene: renderer sem screen")
+                                break
+                        else:
+                            logger.info("Campanha headless finalizada.")
+                            break
+                else:
+                    # Derrota: permanece na mesma cena (DefeatScene)
+                    # DefeatScene pode emitir eventos para repetir ou voltar ao menu
+                    pass
+
+            elif isinstance(result, NextLevelEvent):
+                # Botão "Próxima" da VictoryScene
                 next_scene = campaign.next_level()
                 if next_scene:
                     engine.set_scene(next_scene)
@@ -161,10 +207,20 @@ def main() -> int:
                     if config.mode == "interactive":
                         # Volta para o título
                         screen = getattr(renderer, "screen", None)
-                        engine.set_scene(TitleScene(screen))
+                        if screen is not None:
+                            engine.set_scene(TitleScene(screen))
+                        else:
+                            logger.error("Não foi possível criar TitleScene: renderer sem screen")
+                            break
                     else:
                         logger.info("Campanha headless finalizada.")
                         break
+
+            elif isinstance(result, RetryLevelEvent):
+                # Botão "Repetir" de VictoryScene ou DefeatScene
+                retry_scene = campaign.retry_level()
+                engine.set_scene(retry_scene)
+
             else:
                 # QuitEvent ou fim sem transição explícita
                 break

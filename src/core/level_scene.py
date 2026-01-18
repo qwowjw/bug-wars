@@ -17,7 +17,7 @@ import math
 import random
 from src.core.level_config import LevelConfig
 from src.rendering.ui_helper import render_rich_text_line
-from src.core.events import Event, LevelCompleteEvent, MouseButtonDown, KeyDown
+from src.core.events import Event, LevelCompleteEvent, MouseButtonDown, KeyDown, LevelFinishedEvent, LevelResult
 from src.ai.enemy_controller import (
     EnemyController,
     AI_BALANCED,
@@ -150,10 +150,24 @@ class LevelScene:
 
         self.tutorial_font = pygame.font.SysFont("arial", 24)
         self.completed: bool = False
+        
+        # Rastreamento de métricas para cálculo de score e estrelas
+        self._elapsed_time: float = 0.0
+        self._food_collected: int = 0  # Comida coletada (neste momento apenas contagem, extensível)
+        self._enemies_defeated: int = 0  # Inimigos derrotados (formigas inimigas removidas)
+        self._ants_lost: int = 0  # Formigas aliadas perdidas
+        self._allied_nests_lost: int = 0  # Ninhos aliados perdidos para inimigos
+        self._initial_owners = [cast(Owner, o) for o in self.config.initial_owners]  # Guardamos owners iniciais
+        self._result: Optional["LevelResult"] = None
 
         # --- Configuração da IA Inimiga ---
         profile = self.config.ai_profile or AI_BALANCED
         self.enemy_ai = EnemyController(self, profile)
+
+        # Controle de delay para fim de fase
+        self._finish_delay: float = 1.5  # Tempo de espera em segundos
+        self._finish_timer: float = 0.0
+        self._pending_result: Optional["LevelResult"] = None # Guarda o resultado enquanto espera
 
         self.logger.info(f"Nível {config.name} iniciado. IA: {profile.name}")
 
@@ -321,9 +335,15 @@ class LevelScene:
         if dest_owner != ant_owner:
             if dest_colony.ants:
                 dest_colony.ants.pop()  # remove one enemy ant
+                # Incrementa contador de inimigos derrotados
+                if ant_owner == "ally":
+                    self._enemies_defeated += 1
                 # if defenders depleted, mark nest as empty
                 if len(dest_colony.ants) == 0:
                     self.owners[dest_index] = "empty"
+                    # Se um ninho aliado foi perdido para inimigos, registra
+                    if self._initial_owners[dest_index] == "ally" and ant_owner == "enemy":
+                        self._allied_nests_lost += 1
                 self.logger.debug(
                     "Combat at nest %d: removed one enemy ant", dest_index
                 )
@@ -331,6 +351,9 @@ class LevelScene:
                 return
             else:
                 # No defenders left — flip ownership and add arriving ant
+                # Se um ninho aliado foi perdido para inimigos, registra
+                if self._initial_owners[dest_index] == "ally" and ant_owner == "enemy":
+                    self._allied_nests_lost += 1
                 self.owners[dest_index] = ant_owner
                 ant_obj = ant["ant_obj"]
                 if isinstance(ant_obj, Ant):
@@ -538,8 +561,59 @@ class LevelScene:
         )
         surface.blit(cont_surf, cont_rect)
 
-    # -------------- Update --------------
-    # ... (Mantenha o resto da classe como estava até chegar no método update)
+    # -------------- Cálculo de Score e Estrelas --------------
+    def _calculate_score(self) -> int:
+        """
+        Calcula o score da fase baseado em:
+        score = comida_coletada * 10
+               + inimigos_derrotados * 50
+               - formigas_perdidas * 20
+               - tempo_gasto * 0.5
+        """
+        score = (
+            self._food_collected * 10 +
+            self._enemies_defeated * 50 -
+            self._ants_lost * 20 -
+            int(self._elapsed_time * 0.5)
+        )
+        return max(0, score)  # Garante score >= 0
+
+    def _calculate_stars(self, victory: bool) -> int:
+        """
+        Calcula quantas estrelas o jogador ganhou:
+        ⭐ Vitória: ganhou a fase
+        ⭐ Tempo: terminou antes do time_target
+        ⭐ Eficiência: score >= score_target E nenhum ninho aliado foi perdido para inimigos
+        """
+        stars = 0
+
+        # Estrela 1: Vitória
+        if victory:
+            stars += 1
+        else:
+            return 0  # Sem vitória, zero estrelas
+
+        # Estrela 2: Tempo
+        if self._elapsed_time <= self.config.time_target:
+            stars += 1
+
+        # Estrela 3: Eficiência (score e nenhum ninho aliado perdido)
+        score = self._calculate_score()
+        if score >= self.config.score_target and self._allied_nests_lost == 0:
+            stars += 1
+
+        return stars
+
+    def _build_result(self, victory: bool) -> LevelResult:
+        """Cria o objeto LevelResult com as métricas calculadas."""
+        score = self._calculate_score()
+        stars = self._calculate_stars(victory)
+        return LevelResult(
+            victory=victory,
+            time_spent=self._elapsed_time,
+            score=score,
+            stars=stars,
+        )
 
     # -------------- Update --------------
     def update(self, dt: float) -> None:
@@ -549,6 +623,25 @@ class LevelScene:
         """
         if self.state == "tutorial":
             return
+        
+        # Verifica se a fase já foi concluída e está aguardando o delay
+        if self._pending_result is not None:
+            self._finish_timer += dt
+            
+            # Mantém apenas animações visuais rodando para não parecer que travou
+            self._update_sprite_animation(dt)
+            self._update_ant_movement()
+            
+            # Se o tempo acabou, encerra a cena de vez
+            if self._finish_timer >= self._finish_delay:
+                self.running = False
+                self._result = self._pending_result
+                v_str = "Vitória" if self._result.victory else "Derrota"
+                self.logger.info(f"Fase finalizada ({v_str}) após delay.")
+            return
+
+        # Incrementa tempo decorrido
+        self._elapsed_time += dt
 
         # 1. Processa a fila de transferências pendentes (lógica de envio)
         # Tenta disparar uma formiga por frame se houver pendências
@@ -567,15 +660,28 @@ class LevelScene:
         # 5. Atualiza física/movimento das formigas (deslocamento e colisão)
         self._update_ant_movement()
 
-        # 6. Verifica condição de vitória
+        # 6. Verifica condição de derrota (perdeu todos os ninhos aliados ou não tem formigas)
+        # Conta quantos ninhos e formigas aliadas restam
+        ally_nests = sum(1 for o in self.owners if o == "ally")
+        ally_ants = sum(len(c.ants) for i, c in enumerate(self.colonies) if self.owners[i] == "ally")
+        
+        if ally_nests == 0 or (ally_nests > 0 and ally_ants == 0 and not self.moving_ants):
+            # Perdeu todos os ninhos ou não tem mais formigas para recuperar
+            # Salvamos o resultado de derrota e iniciamos o delay para finalizar
+            if self._pending_result is None:
+                self._pending_result = self._build_result(victory=False)
+            return
+
+        # 7. Verifica condição de vitória
         vc = self.config.victory_condition or default_victory_condition
         if vc(self.owners, self.colonies):
-            self.completed = True
-            self.running = False
-            self.logger.info("Level '%s' completed", self.config.name)
+            if self._pending_result is None:
+                self._pending_result = self._build_result(victory=True)
+            return
+
 
     @property
     def result_event(self) -> Optional[Event]:
-        if self.completed:
-            return LevelCompleteEvent(level_name=self.config.name)
+        if not self.running and self._result:
+            return LevelFinishedEvent(self._result)
         return None

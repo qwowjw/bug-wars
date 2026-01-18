@@ -9,7 +9,12 @@ IMG_CTRL = Settings.ASSETS_DIR / "sprites" / "buttons" / "ctrl.png"
 def create_intro_config(settings: Settings) -> LevelConfig:
     return LevelConfig(
         name="intro",
-        nest_positions=[(200, 200), (600, 200), (400, 300), (400, 100)],
+        nest_positions=[
+            (200, 300),  # Esquerda
+            (600, 300),  # Direita
+            (400, 450),  # Baixo
+            (400, 150),  # Cima
+        ],
         initial_counts=[10, 0, 0, 0],
         initial_owners=["ally", "empty", "empty", "empty"],
         tutorial=TutorialConfig(
@@ -65,7 +70,12 @@ def create_intro2_config(settings: Settings) -> LevelConfig:
 def create_intro3_config(settings: Settings) -> LevelConfig:
     return LevelConfig(
         name="intro3",
-        nest_positions=[(150, 250), (350, 120), (350, 300), (550, 250)],
+        nest_positions=[
+            (150, 300),  # Esquerda Centro
+            (400, 150),  # Centro Cima
+            (400, 450),  # Centro Baixo
+            (650, 300),  # Direita Centro
+        ],
         initial_counts=[10, 0, 0, 10],
         initial_owners=["ally", "empty", "empty", "enemy"],
         enemy_produces=True,

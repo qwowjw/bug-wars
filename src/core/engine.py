@@ -8,7 +8,7 @@ from typing import Any, Optional, Protocol, runtime_checkable
 
 from src.core.interfaces import IClock, IInputHandler, IRenderer
 from src.core.app_config import AppConfig
-from src.core.events import QuitEvent, Event
+from src.core.events import QuitEvent, Event, LevelFinishedEvent
 from enum import Enum, auto
 
 
@@ -88,7 +88,12 @@ class Engine:
                 # 4. Render
                 self.renderer.render(self.current_scene)
 
-                # 5. Verificações Headless (Timeout)
+                # 5. Verificar eventos de conclusão da cena
+                result_event = self.current_scene.result_event
+                if result_event:
+                    self._handle_scene_result(result_event)
+
+                # 6. Verificações Headless (Timeout)
                 if self.config.mode == "headless":
                     elapsed = (self.clock.get_time() - start_time) / 1000.0
                     if elapsed > self.config.headless_timeout:
@@ -108,6 +113,25 @@ class Engine:
             self.logger.info("Cena finalizada ou Engine pausado.")
 
         return EngineExit.SCENE_FINISHED
+
+    def _handle_scene_result(self, event: Event) -> None:
+        """Processa eventos de conclusão de cena e roteia para as próximas cenas."""
+        if isinstance(event, LevelFinishedEvent):
+            # Roteamento de cenas baseado no resultado da fase
+            if event.result.victory:
+                from src.core.scenes.victory_scene import VictoryScene
+
+                self.current_scene = VictoryScene(event.result)
+                self.logger.info(
+                    "Mudando para VictoryScene. Stars: %d, Score: %d",
+                    event.result.stars,
+                    event.result.score,
+                )
+            else:
+                from src.core.scenes.defeat_scene import DefeatScene
+
+                self.current_scene = DefeatScene()
+                self.logger.info("Mudando para DefeatScene.")
 
     def shutdown(self) -> None:
         """Encerra explicitamente os recursos do engine."""

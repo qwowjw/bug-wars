@@ -7,6 +7,7 @@ import os
 import argparse
 from dataclasses import dataclass
 from typing import Literal
+from src.config.settings import Settings
 
 RunMode = Literal["interactive", "headless"]
 
@@ -26,7 +27,7 @@ class AppConfig:
     def from_env(cls) -> "AppConfig":
         """
         Carrega configurações do ambiente.
-        CLI > Env Vars > Defaults
+        CLI > Env Vars > Defaults (Settings)
         """
         parser = argparse.ArgumentParser(add_help=True)
 
@@ -39,19 +40,19 @@ class AppConfig:
         parser.add_argument(
             "--width",
             type=int,
-            default=int(os.getenv("ANT_SIM_WIDTH", 800)),
+            default=int(os.getenv("ANT_SIM_WIDTH", Settings.WIDTH)),
         )
 
         parser.add_argument(
             "--height",
             type=int,
-            default=int(os.getenv("ANT_SIM_HEIGHT", 400)),
+            default=int(os.getenv("ANT_SIM_HEIGHT", Settings.HEIGHT)),
         )
 
         parser.add_argument(
             "--fps",
             type=int,
-            default=int(os.getenv("ANT_SIM_FPS", 60)),
+            default=int(os.getenv("ANT_SIM_FPS", Settings.FPS)),
         )
 
         parser.add_argument(

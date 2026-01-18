@@ -6,8 +6,8 @@ from pathlib import Path
 class Settings:
     # --- Configurações de Display ---
     WIDTH: int = 800
-    HEIGHT: int = 400
-    FPS: int = 160
+    HEIGHT: int = 600
+    FPS: int = 60
 
     # --- Configurações de Gameplay ---
     SPEED: int = 4
@@ -46,6 +46,11 @@ class Settings:
     ANTS_DIR: Path = SPRITES_DIR / "ants"
     STRUCTURES_DIR: Path = SPRITES_DIR / "structures"
 
+    # --- Caminhos de UI ---
+    UI_DIR: Path = SPRITES_DIR / "ui"
+    IMG_STAR_YELLOW: Path = UI_DIR / "yellow_star.png"
+    IMG_STAR_BLACK: Path = UI_DIR / "black_star.png"
+    
     # --- Configurações de Ninhos/Colônias ---
     NEST_POSITIONS: List[Tuple[int, int]] = [
         (200, 200),

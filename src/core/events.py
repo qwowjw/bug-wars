@@ -47,3 +47,33 @@ class KeyDown(Event):
     key: int
     shift: bool = False
     ctrl: bool = False
+
+@dataclass(frozen=True)
+class LevelResult:
+    """Resultado imutável de uma fase completa."""
+
+    victory: bool
+    time_spent: float
+    score: int
+    stars: int
+
+
+@dataclass(frozen=True)
+class LevelFinishedEvent(Event):
+    """Evento disparado quando uma fase é terminada (vitória ou derrota)."""
+
+    result: LevelResult
+
+
+@dataclass(frozen=True)
+class NextLevelEvent(Event):
+    """Evento para prosseguir para a próxima fase."""
+
+    pass
+
+
+@dataclass(frozen=True)
+class RetryLevelEvent(Event):
+    """Evento para reiniciar a fase atual."""
+
+    pass

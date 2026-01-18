@@ -22,8 +22,12 @@ class TitleScene(IScene):
         self.btn_tutorial = pygame.Rect(0, 0, 240, 60)
         self.btn_play = pygame.Rect(0, 0, 240, 60)
 
-        self.btn_tutorial.center = (Settings.WIDTH // 2, Settings.HEIGHT // 2 + 30)
-        self.btn_play.center = (Settings.WIDTH // 2, Settings.HEIGHT // 2 + 110)
+        cx = Settings.WIDTH // 2
+        cy = Settings.HEIGHT // 2
+        
+        # Botões centralizados verticalmente com um leve offset
+        self.btn_tutorial.center = (cx, cy + 50)
+        self.btn_play.center = (cx, cy + 130)
 
     def handle_event(self, event: Any) -> None:
         if isinstance(event, MouseButtonDown) and event.button == 1:
@@ -65,7 +69,7 @@ class TitleScene(IScene):
 
         title = self.font_title.render("Ant Simulator", True, Settings.SELECTION_COLOR)
         surface.blit(
-            title, title.get_rect(center=(Settings.WIDTH // 2, Settings.HEIGHT // 3))
+            title, title.get_rect(center=(Settings.WIDTH // 2, int(Settings.HEIGHT * 0.15)))
         )
 
         self._draw_button(surface, self.btn_tutorial, "TUTORIAL")
@@ -75,3 +79,9 @@ class TitleScene(IScene):
     def next_action(self) -> Event:
         """Helper para o Main saber o que fazer quando a cena acabar."""
         return self._next_event or Event()
+
+    @property
+    def result_event(self) -> Event | None:
+        """Implementa o protocolo IScene."""
+        return self._next_event
+
